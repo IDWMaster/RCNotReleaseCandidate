@@ -1,0 +1,3 @@
+[submodule "WPFDXInterop"]
+	path = WPFDXInterop
+	url = git@github.com:Microsoft/WPFDXInterop.git
