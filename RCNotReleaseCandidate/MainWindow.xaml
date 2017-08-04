@@ -12,5 +12,6 @@
                 <MenuItem Header="_Connect" Click="MenuItem_Click"></MenuItem>
             </MenuItem>
         </Menu>
+        <Image x:Name="drawTarget"></Image>
     </Grid>
 </Window>

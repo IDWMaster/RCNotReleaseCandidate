@@ -1,0 +1,22 @@
+﻿<Window x:Class="RCNotReleaseCandidate.ConnectDlg"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:RCNotReleaseCandidate"
+        mc:Ignorable="d"
+        Title="ConnectDlg" Height="127.566" Width="343.988">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"></ColumnDefinition>
+            <ColumnDefinition Width="*"></ColumnDefinition>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"></RowDefinition>
+            <RowDefinition Height="Auto"></RowDefinition>
+        </Grid.RowDefinitions>
+        <TextBlock Text="IP or hostname" KeyDown="TextBlock_KeyDown"></TextBlock>
+        <TextBox x:Name="ipOrHostname" Grid.Column="1"></TextBox>
+        <Button Click="Button_Click" x:Name="connectBtn" Grid.Row="1" Grid.ColumnSpan="2">Connect</Button>
+    </Grid>
+</Window>
