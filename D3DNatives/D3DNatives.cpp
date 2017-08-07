@@ -101,8 +101,7 @@ public:
 				resource->Release();
 				dupe->ReleaseFrame();
 			}
-		}
-		else {
+		} else {
 			HDC washington = 0;
 			intermediate->GetDC(&washington);
 			HDC desktop = GetDC(0);
