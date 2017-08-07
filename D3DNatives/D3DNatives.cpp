@@ -6,7 +6,8 @@
 #include <d3d11.h>
 #include <dxgi.h>
 #include <dxgi1_2.h>
-
+#include <mfapi.h>
+#include <mfcaptureengine.h>
 
 class WPFEngine {
 public:
@@ -52,8 +53,13 @@ public:
 		
 		
 		IDXGIDevice* dxgi = 0;
-		D3D11CreateDevice(0, D3D_DRIVER_TYPE_HARDWARE, 0, 0, 0, 0, D3D11_SDK_VERSION, &dev11, 0, &ctx11);
+		D3D11CreateDevice(0, D3D_DRIVER_TYPE_HARDWARE, 0, D3D11_CREATE_DEVICE_VIDEO_SUPPORT, 0, 0, D3D11_SDK_VERSION, &dev11, 0, &ctx11);
+		UINT resetToken = 0;
+		IMFDXGIDeviceManager* mngr = 0;
+		MFCreateDXGIDeviceManager(&resetToken, &mngr);
+		mngr->ResetDevice(dev11, resetToken);
 		
+		mngr->Release();
 		dev11->QueryInterface(&dxgi);
 		IDXGIAdapter* adapter;
 		dxgi->GetParent(__uuidof(IDXGIAdapter), (void**)&adapter);
@@ -81,6 +87,7 @@ public:
 			DXGI_OUTDUPL_FRAME_INFO desc;
 			IDXGIResource* resource = 0;
 			dupe->AcquireNextFrame(-1, &desc, &resource);
+			
 			if (resource) {
 				ID3D11Texture2D* tex = 0;
 				resource->QueryInterface(&tex);
