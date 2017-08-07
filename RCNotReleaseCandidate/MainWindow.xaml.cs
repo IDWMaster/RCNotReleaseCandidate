@@ -16,10 +16,19 @@ using System.Net;
 using System.Net.Sockets;
 using System.IO;
 using System.Windows.Interop;
-using Microsoft.Wpf.Interop.DirectX;
+using System.Runtime.InteropServices;
+using System.Windows.Threading;
+using System.Security;
 
 namespace RCNotReleaseCandidate
 {
+
+    struct ENGINE_CONTEXT
+    {
+        public IntPtr surface; //IDirect3DSurface9*
+        public IntPtr handle; //Handle to engine
+    }
+
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
@@ -28,19 +37,14 @@ namespace RCNotReleaseCandidate
         Stream str;
         TcpListener mlist;
         bool running = true;
-        void Render(IntPtr surface, bool isNew)
-        {
-
-        }
+        
         public MainWindow()
         {
             InitializeComponent();
             mlist = new TcpListener(new IPEndPoint(IPAddress.Any, 3870));
             mlist.Start();
-            renderTarget = new D3D11Image();
-            renderTarget.WindowOwner = new WindowInteropHelper(this).Handle;
-            renderTarget.OnRender = Render;
-            renderTarget.RequestRender();
+            
+            Loaded += windowLoaded;
             drawTarget.Source = renderTarget;
             Action item = async () => {
                 while(running)
@@ -57,7 +61,50 @@ namespace RCNotReleaseCandidate
             };
             item();
         }
-        D3D11Image renderTarget;
+        ENGINE_CONTEXT ctx;
+        [SuppressUnmanagedCodeSecurity]
+        [DllImport("D3DNatives.dll")]
+        static extern ENGINE_CONTEXT CreateEngine(IntPtr window);
+        [SuppressUnmanagedCodeSecurity]
+        [DllImport("D3DNatives.dll")]
+        static extern void DrawBackbuffer(IntPtr context);
+        private void windowLoaded(object sender, RoutedEventArgs e)
+        {
+            IntPtr handle = new WindowInteropHelper(this).Handle;
+            System.Threading.Thread updateThread = new System.Threading.Thread(delegate () {
+                ctx = CreateEngine(handle);
+                Dispatcher.Invoke(() => {
+                    renderTarget = new D3DImage();
+                    drawTarget.Source = renderTarget;
+                    renderTarget.Lock();
+                    renderTarget.SetBackBuffer(D3DResourceType.IDirect3DSurface9, ctx.surface);
+                    renderTarget.Unlock();
+                });
+                while (true)
+                {
+                    DrawBackbuffer(ctx.handle);
+                    Dispatcher.Invoke(() => {
+                        renderTarget.Lock();
+                        renderTarget.AddDirtyRect(new Int32Rect(0, 0, renderTarget.PixelWidth, renderTarget.PixelHeight));
+                        renderTarget.Unlock();
+                    });
+                    
+                }
+            });
+            updateThread.Start();
+        }
+
+        private void renderFrame(object sender, EventArgs e)
+        {
+            
+        }
+
+        private void RenderTarget_IsFrontBufferAvailableChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            
+        }
+
+        D3DImage renderTarget;
         //Preview mode (show local screen mirror)
         async void StartPreview()
         {

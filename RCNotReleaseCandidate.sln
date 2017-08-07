@@ -5,7 +5,7 @@ VisualStudioVersion = 15.0.26430.16
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RCNotReleaseCandidate", "RCNotReleaseCandidate\RCNotReleaseCandidate.csproj", "{6B4FAA36-AE91-4DDF-AE8F-9F93EF67300D}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Microsoft.Wpf.Interop.DirectX_winsdk", "WPFDXInterop\src\Microsoft.Wpf.Interop.DirectX\Microsoft.Wpf.Interop.DirectX_winsdk.vcxproj", "{157A478D-FE02-4EB2-BD7C-8CF3BF1CB9A2}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3DNatives", "D3DNatives\D3DNatives.vcxproj", "{DE02717C-B54C-4DCD-A615-B02904757513}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -29,16 +29,16 @@ Global
 		{6B4FAA36-AE91-4DDF-AE8F-9F93EF67300D}.Release|x64.Build.0 = Release|Any CPU
 		{6B4FAA36-AE91-4DDF-AE8F-9F93EF67300D}.Release|x86.ActiveCfg = Release|Any CPU
 		{6B4FAA36-AE91-4DDF-AE8F-9F93EF67300D}.Release|x86.Build.0 = Release|Any CPU
-		{157A478D-FE02-4EB2-BD7C-8CF3BF1CB9A2}.Debug|Any CPU.ActiveCfg = Debug|Win32
-		{157A478D-FE02-4EB2-BD7C-8CF3BF1CB9A2}.Debug|x64.ActiveCfg = Debug|x64
-		{157A478D-FE02-4EB2-BD7C-8CF3BF1CB9A2}.Debug|x64.Build.0 = Debug|x64
-		{157A478D-FE02-4EB2-BD7C-8CF3BF1CB9A2}.Debug|x86.ActiveCfg = Debug|Win32
-		{157A478D-FE02-4EB2-BD7C-8CF3BF1CB9A2}.Debug|x86.Build.0 = Debug|Win32
-		{157A478D-FE02-4EB2-BD7C-8CF3BF1CB9A2}.Release|Any CPU.ActiveCfg = Release|Win32
-		{157A478D-FE02-4EB2-BD7C-8CF3BF1CB9A2}.Release|x64.ActiveCfg = Release|x64
-		{157A478D-FE02-4EB2-BD7C-8CF3BF1CB9A2}.Release|x64.Build.0 = Release|x64
-		{157A478D-FE02-4EB2-BD7C-8CF3BF1CB9A2}.Release|x86.ActiveCfg = Release|Win32
-		{157A478D-FE02-4EB2-BD7C-8CF3BF1CB9A2}.Release|x86.Build.0 = Release|Win32
+		{DE02717C-B54C-4DCD-A615-B02904757513}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{DE02717C-B54C-4DCD-A615-B02904757513}.Debug|x64.ActiveCfg = Debug|x64
+		{DE02717C-B54C-4DCD-A615-B02904757513}.Debug|x64.Build.0 = Debug|x64
+		{DE02717C-B54C-4DCD-A615-B02904757513}.Debug|x86.ActiveCfg = Debug|Win32
+		{DE02717C-B54C-4DCD-A615-B02904757513}.Debug|x86.Build.0 = Debug|Win32
+		{DE02717C-B54C-4DCD-A615-B02904757513}.Release|Any CPU.ActiveCfg = Release|Win32
+		{DE02717C-B54C-4DCD-A615-B02904757513}.Release|x64.ActiveCfg = Release|x64
+		{DE02717C-B54C-4DCD-A615-B02904757513}.Release|x64.Build.0 = Release|x64
+		{DE02717C-B54C-4DCD-A615-B02904757513}.Release|x86.ActiveCfg = Release|Win32
+		{DE02717C-B54C-4DCD-A615-B02904757513}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
