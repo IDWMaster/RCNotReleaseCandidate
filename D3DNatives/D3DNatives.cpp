@@ -9,6 +9,21 @@
 #include <mfapi.h>
 #include <mfcaptureengine.h>
 
+
+
+class VideoEncoder {
+public:
+	VideoEncoder() {
+
+	}
+	///<summary>Encodes a single frame of video</summary>
+	void WriteFrame(ID3D11Texture2D* frame) {
+		//TODO: Encode the video frame here.
+	}
+};
+
+
+
 class WPFEngine {
 public:
 	IDirect3D9Ex* ctx;
@@ -71,17 +86,52 @@ public:
 			output1->DuplicateOutput(dev11, &dupe);
 			output1->Release();
 		}
-		else {
-
-			dev11->Release();
-			ctx11->Release();
-		}
 		output->Release();
 		adapter->Release();
 		dxgi->Release();
 		DrawBackbuffer();
 
+		encoder = new VideoEncoder();
 	}
+	VideoEncoder* encoder;
+	///<summary>Takes a snapshot of the desktop and encodes it into a video frame</summary>
+	void RecordFrame() {
+		if (dupe) {
+			DXGI_OUTDUPL_FRAME_INFO desc;
+			IDXGIResource* resource = 0;
+			dupe->AcquireNextFrame(-1, &desc, &resource);
+
+			if (resource) {
+				ID3D11Texture2D* tex = 0;
+				resource->QueryInterface(&tex);
+				encoder->WriteFrame(tex);
+				tex->Release();
+				resource->Release();
+				dupe->ReleaseFrame();
+			}
+		}
+		else {
+			HDC washington = 0;
+			intermediate->GetDC(&washington);
+			HDC desktop = GetDC(0);
+			//TODO: BitBlt here is really slow because we're copying between GPU/system memory here.
+			BOOL success = BitBlt(washington, 0, 0, width, height, desktop, 0, 0, SRCCOPY);
+			ReleaseDC(0, desktop);
+			intermediate->ReleaseDC(washington);
+			//TODO: UpdateSurface only works for system->GPU copy
+			HRESULT res = dev->StretchRect(intermediate, 0, surface, 0, D3DTEXF_NONE);
+			ID3D11Resource* videoframe = 0;
+			dev11->OpenSharedResource(sharehandle, __uuidof(ID3D11Resource), (void**)&videoframe);
+			ID3D11Texture2D* texture = 0;
+			videoframe->QueryInterface(&texture);
+			encoder->WriteFrame(texture);
+			texture->Release();
+			videoframe->Release();
+		}
+	}
+
+
+	///<summary>Takes a snapshot of the desktop and mirrors it in the WPF window</summary>
 	void DrawBackbuffer() {
 		if (dupe) {
 			DXGI_OUTDUPL_FRAME_INFO desc;
@@ -130,6 +180,7 @@ public:
 		if (ctx11) {
 			ctx11->Release();
 		}
+		delete encoder;
 	}
 };
 
