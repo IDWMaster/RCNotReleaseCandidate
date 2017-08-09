@@ -193,6 +193,10 @@ extern "C" {
 	__declspec(dllexport) void DrawBackbuffer(WPFEngine* engine) {
 		engine->DrawBackbuffer();
 	}
+
+	__declspec(dllexport) void RecordFrame(WPFEngine* engine) {
+		engine->RecordFrame();
+	}
 	__declspec(dllexport) ENGINE_CONTEXT CreateEngine(HWND ow) {
 		ENGINE_CONTEXT ctx;
 		ctx.engine = new WPFEngine(ow);

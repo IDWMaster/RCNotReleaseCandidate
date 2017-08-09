@@ -68,6 +68,8 @@ namespace RCNotReleaseCandidate
         [SuppressUnmanagedCodeSecurity]
         [DllImport("D3DNatives.dll")]
         static extern void DrawBackbuffer(IntPtr context);
+        [DllImport("D3DNatives.dll")]
+        static extern void RecordFrame(IntPtr context);
         private void windowLoaded(object sender, RoutedEventArgs e)
         {
             IntPtr handle = new WindowInteropHelper(this).Handle;
@@ -83,6 +85,7 @@ namespace RCNotReleaseCandidate
                 while (true)
                 {
                     DrawBackbuffer(ctx.handle);
+                    RecordFrame(ctx.handle);
                     Dispatcher.Invoke(() => {
                         renderTarget.Lock();
                         renderTarget.AddDirtyRect(new Int32Rect(0, 0, renderTarget.PixelWidth, renderTarget.PixelHeight));
