@@ -84,8 +84,13 @@ namespace RCNotReleaseCandidate
                 });
                 while (true)
                 {
-                    DrawBackbuffer(ctx.handle);
-                    RecordFrame(ctx.handle);
+                    if(recordMode)
+                    {
+                        RecordFrame(ctx.handle);
+                    }else
+                    {
+                        DrawBackbuffer(ctx.handle);
+                    }
                     Dispatcher.Invoke(() => {
                         renderTarget.Lock();
                         renderTarget.AddDirtyRect(new Int32Rect(0, 0, renderTarget.PixelWidth, renderTarget.PixelHeight));
@@ -107,15 +112,19 @@ namespace RCNotReleaseCandidate
             
         }
 
+        bool recordMode = true;
+
         D3DImage renderTarget;
         //Preview mode (show local screen mirror)
         async void StartPreview()
         {
+            recordMode = false;
+
         }
 
         async void StreamOn()
         {
-            
+            recordMode = true;
         }
 
         private void MenuItem_Click(object sender, RoutedEventArgs e)
