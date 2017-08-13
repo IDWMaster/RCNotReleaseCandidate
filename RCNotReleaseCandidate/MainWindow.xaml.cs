@@ -45,6 +45,7 @@ namespace RCNotReleaseCandidate
             mlist.Start();
             
             Loaded += windowLoaded;
+            Closed += MainWindow_Closed;
             drawTarget.Source = renderTarget;
             Action item = async () => {
                 while(running)
@@ -54,6 +55,7 @@ namespace RCNotReleaseCandidate
                         //for now; support one bi-directional connection.
                         var client = (await mlist.AcceptTcpClientAsync()).GetStream();
                         str = client;
+                        StreamOn();
                         break;
                     }catch(Exception er) {
                     }
@@ -61,10 +63,17 @@ namespace RCNotReleaseCandidate
             };
             item();
         }
+
+        private void MainWindow_Closed(object sender, EventArgs e)
+        {
+            running = false;
+        }
+
+        delegate void CB(IntPtr data, int len);
         ENGINE_CONTEXT ctx;
         [SuppressUnmanagedCodeSecurity]
         [DllImport("D3DNatives.dll")]
-        static extern ENGINE_CONTEXT CreateEngine(IntPtr window);
+        static extern ENGINE_CONTEXT CreateEngine(IntPtr window, CB callback);
         [SuppressUnmanagedCodeSecurity]
         [DllImport("D3DNatives.dll")]
         static extern void DrawBackbuffer(IntPtr context);
@@ -74,7 +83,20 @@ namespace RCNotReleaseCandidate
         {
             IntPtr handle = new WindowInteropHelper(this).Handle;
             System.Threading.Thread updateThread = new System.Threading.Thread(delegate () {
-                ctx = CreateEngine(handle);
+                ctx = CreateEngine(handle,(data,len)=> {
+                    byte[] buffer = new byte[len];
+                    Marshal.Copy(data, buffer, 0, len);
+                    try
+                    {
+                        BinaryWriter mwriter = new BinaryWriter(str);
+                        mwriter.Write((byte)0);
+                        mwriter.Write(buffer.Length);
+                        mwriter.Write(buffer);
+                    }catch(Exception er)
+                    {
+                        StartPreview(); //return to preview mode.
+                    }
+                });
                 Dispatcher.Invoke(() => {
                     renderTarget = new D3DImage();
                     drawTarget.Source = renderTarget;
@@ -82,7 +104,7 @@ namespace RCNotReleaseCandidate
                     renderTarget.SetBackBuffer(D3DResourceType.IDirect3DSurface9, ctx.surface);
                     renderTarget.Unlock();
                 });
-                while (true)
+                while (running)
                 {
                     if(recordMode)
                     {
@@ -91,11 +113,18 @@ namespace RCNotReleaseCandidate
                     {
                         DrawBackbuffer(ctx.handle);
                     }
-                    Dispatcher.Invoke(() => {
-                        renderTarget.Lock();
-                        renderTarget.AddDirtyRect(new Int32Rect(0, 0, renderTarget.PixelWidth, renderTarget.PixelHeight));
-                        renderTarget.Unlock();
-                    });
+                    try
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            renderTarget.Lock();
+                            renderTarget.AddDirtyRect(new Int32Rect(0, 0, renderTarget.PixelWidth, renderTarget.PixelHeight));
+                            renderTarget.Unlock();
+                        });
+                    }catch(Exception er)
+                    {
+
+                    }
                     
                 }
             });
@@ -112,7 +141,7 @@ namespace RCNotReleaseCandidate
             
         }
 
-        bool recordMode = true;
+        bool recordMode = false;
 
         D3DImage renderTarget;
         //Preview mode (show local screen mirror)
