@@ -148,9 +148,10 @@ public:
 		switch (type) {
 		case METransformHaveOutput:
 		{
+			DWORD status;
+			startOutput:
 			lastFrameTime = std::chrono::steady_clock::now();
 			framecount = 0;
-			DWORD status;
 			MFT_OUTPUT_DATA_BUFFER sample;
 			memset(&sample, 0, sizeof(sample));
 			sample.dwStreamID = isthe;
@@ -173,6 +174,9 @@ public:
 			if (frame == 0) {
 				//draining
 				goto velociraptor;
+			}
+			if (sample.pSample) {
+				goto startOutput;
 			}
 		}
 			break;
