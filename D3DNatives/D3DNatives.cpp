@@ -12,6 +12,9 @@
 #include <evr.h>
 #include <codecapi.h>
 #include <chrono>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 class VideoEncoder {
 public:
@@ -122,9 +125,91 @@ public:
 		e = encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
 		e = encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
 		
+		encodeThread = new std::thread([=]() {
+			while (running) {
+				IMFMediaEvent* evt = 0;
+				generator->GetEvent(0, &evt);
+				MediaEventType type;
+				evt->GetType(&type);
+				switch (type) {
+				case METransformHaveOutput:
+				{
+					DWORD status;
+					lastFrameTime = std::chrono::steady_clock::now();
+					framecount = 0;
+					MFT_OUTPUT_DATA_BUFFER sample;
+					memset(&sample, 0, sizeof(sample));
+					sample.dwStreamID = isthe;
+					encoder->ProcessOutput(0, 1, &sample, &status);
+					if (sample.pSample) {
+						IMFMediaBuffer* vampire = 0;
+						sample.pSample->GetBufferByIndex(0, &vampire);
+						DWORD maxlen = 0;
+						DWORD len = 0;
+						BYTE* me = 0;
+						vampire->Lock(&me, &maxlen, &len);
+						packetCallback(me, len);
+						vampire->Unlock();
+						vampire->Release();
+						sample.pSample->Release();
+					}
+					if (sample.pEvents) {
+						sample.pEvents->Release();
+					}
+				}
+				break;
+				case METransformNeedInput:
+				{
+					ID3D11Texture2D* vidframe = 0;
+					{
+						std::unique_lock<std::mutex> l(mtx);
+						while (running) {
+							if (pendingFrames.size()) {
+								vidframe = pendingFrames.front();
+								break;
+							}
+						}
+					}
+					if (!vidframe) {
+						break;
+					}
+
+
+					//DXGI_FORMAT_NV12
+					IMFMediaBuffer* buffy = 0;
+					MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), vidframe, 0, false, &buffy);
+					IMFSample* sample = 0;
+					MFCreateSample(&sample);
+					sample->AddBuffer(buffy);
+
+					sample->SetSampleDuration(100000);
+					IMFMediaEvent* mevt = 0;
+					HRESULT result = encoder->ProcessInput(isthe, sample, 0);
+					sample->Release();
+					vidframe->Release();
+					buffy->Release();
+				}
+				break;
+				}
+			}
+		});
+
 
 		
 	}
+
+
+
+
+	std::queue<ID3D11Texture2D*> pendingFrames;
+	std::condition_variable evt;
+	std::mutex mtx;
+	bool running = true;
+	std::thread* encodeThread;
+
+
+
+
 	
 	int framecount = 0;
 	///<summary>Encodes a single frame of video</summary>
