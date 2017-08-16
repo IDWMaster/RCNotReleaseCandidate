@@ -67,6 +67,7 @@ namespace RCNotReleaseCandidate
         private void MainWindow_Closed(object sender, EventArgs e)
         {
             running = false;
+            pevt.Set();
         }
 
         delegate void CB(IntPtr data, int len);
@@ -79,10 +80,41 @@ namespace RCNotReleaseCandidate
         static extern void DrawBackbuffer(IntPtr context);
         [DllImport("D3DNatives.dll")]
         static extern void RecordFrame(IntPtr context);
+        Queue<byte[]> packets = new Queue<byte[]>();
+        System.Threading.AutoResetEvent pevt = new System.Threading.AutoResetEvent(false);
+
         private void windowLoaded(object sender, RoutedEventArgs e)
         {
             IntPtr handle = new WindowInteropHelper(this).Handle;
             System.Threading.Thread updateThread = new System.Threading.Thread(delegate () {
+
+                System.Threading.Thread netthread = new System.Threading.Thread(delegate () {
+                    while(running)
+                    {
+                        try
+                        {
+                            byte[] packet = null;
+                            lock(packets)
+                            {
+                                if(packets.Any())
+                                {
+                                    packet = packets.Dequeue();
+                                }
+                            }
+                            if(packet == null)
+                            {
+                                pevt.WaitOne();
+                                continue;
+                            }
+                            str.Write(packet, 0, packet.Length);
+                            str.Flush();
+                        }catch(Exception er)
+                        {
+
+                        }
+                    }
+                });
+                netthread.Start();
                 ctx = CreateEngine(handle,(data,len)=> {
                     byte[] buffer = new byte[len];
                     Marshal.Copy(data, buffer, 0, len);
@@ -92,6 +124,12 @@ namespace RCNotReleaseCandidate
                         mwriter.Write((byte)0);
                         mwriter.Write(buffer.Length);
                         mwriter.Write(buffer);
+                        //str.Flush();
+                      /* lock(packets)
+                        {
+                            packets.Enqueue((mwriter.BaseStream as MemoryStream).ToArray());
+                            pevt.Set();
+                        }*/
                     }catch(Exception er)
                     {
                         StartPreview(); //return to preview mode.

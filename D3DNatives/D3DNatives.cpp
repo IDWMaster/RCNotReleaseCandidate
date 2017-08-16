@@ -52,26 +52,6 @@ public:
 		//HRESULT vres = enumerator->CheckVideoProcessorFormat(DXGI_FORMAT_NV12,&vflags);
 		viddev->CreateVideoProcessor(enumerator, 0, &processor);
 		ctx->QueryInterface(&vidcontext);
-		vidcontext->VideoProcessorSetStreamFrameFormat(processor, 0, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE);
-		vidcontext->VideoProcessorSetStreamOutputRate(processor, 0, D3D11_VIDEO_PROCESSOR_OUTPUT_RATE_NORMAL, true, 0);
-		D3D11_VIDEO_COLOR backcolor;
-		backcolor.RGBA.A = 1;
-		backcolor.RGBA.B = 0;
-		backcolor.RGBA.G = 0;
-		backcolor.RGBA.R = 0;
-		vidcontext->VideoProcessorSetOutputBackgroundColor(processor, 0, &backcolor);
-		RECT angle;
-		angle.left = 0;
-		angle.top = 0;
-		angle.right = 1920;
-		angle.bottom = 1080;
-		vidcontext->VideoProcessorSetStreamSourceRect(processor, 0, true, &angle);
-		vidcontext->VideoProcessorSetStreamDestRect(processor, 0, true, &angle);
-		D3D11_VIDEO_PROCESSOR_COLOR_SPACE outerspace;
-		memset(&outerspace, 0, sizeof(outerspace)); //How to compute the sizeof(outerspace)
-		outerspace.YCbCr_xvYCC = 1;
-		vidcontext->VideoProcessorSetStreamColorSpace(processor, 0, &outerspace);
-		vidcontext->VideoProcessorSetOutputColorSpace(processor, &outerspace);
 		//TODO: Initialize
 
 		streaminfo.Enable = true;
@@ -111,12 +91,11 @@ public:
 		MFCreateMediaType(&o);
 		o->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
 		o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
-		o->SetUINT32(MF_MT_AVG_BITRATE, 10000000);
-		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 25, 1);
+		o->SetUINT32(MF_MT_AVG_BITRATE, 10000000*5); //TODO: Set this to available bandwidth on network link. Currently optimized for local transfers.
+		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 30, 1);
 		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Get from texture info
-		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
-		o->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High);
-		o->SetUINT32(MF_MT_MPEG2_LEVEL, eAVEncH264VLevel3_1);
+		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_MixedInterlaceOrProgressive);
+		o->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Simple);
 		o->SetUINT32(CODECAPI_AVEncCommonRateControlMode, eAVEncCommonRateControlMode_LowDelayVBR);
 		UINT togepi = 0;
 		IMFDXGIDeviceManager* devmgr = 0;
@@ -131,10 +110,10 @@ public:
 		MFCreateMediaType(&o);
 		o->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
 		o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_ARGB32);
-		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_MixedInterlaceOrProgressive);
 		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Load from texture
 		MFSetAttributeRatio(o, MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
-		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 25, 1);
+		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 30, 1);
 		e = encoder->SetInputType(thebird, o, 0);
 		o->Release();
 		DWORD flags;
@@ -145,6 +124,7 @@ public:
 
 		
 	}
+	int framecount = 0;
 	///<summary>Encodes a single frame of video</summary>
 	void WriteFrame(ID3D11Texture2D* frame) {
 		//TODO: Encode the video frame here.
@@ -207,7 +187,6 @@ public:
 			viddev->CreateVideoProcessorOutputView(vidframe, enumerator, &outdesc, &outputview);
 		
 			streaminfo.pInputSurface = inputview;
-			//fail on ID3D11Device->Release();
 			HRESULT blt = vidcontext->VideoProcessorBlt(processor, outputview, 0, 1, &streaminfo);
 			inputview->Release();
 			outputview->Release();
@@ -218,14 +197,24 @@ public:
 			MFCreateSample(&sample);
 			sample->AddBuffer(buffy);
 			
-			sample->SetSampleDuration(1000);
+			sample->SetSampleDuration(100000);
 			IMFMediaEvent* mevt = 0;
 			HRESULT result = encoder->ProcessInput(isthe, sample, 0);
+			framecount++;
+			/*if (framecount > 1) {
+				framecount = 0;
+				encoder->ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0);
+			}*/
 			sample->Release();
 			vidframe->Release();
 			buffy->Release();
 		}
 			break;
+		case METransformDrainComplete: 
+		{
+			encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
+		}
+									   break;
 		}
 		evt->Release();
 	}
