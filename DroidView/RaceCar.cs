@@ -83,10 +83,16 @@ namespace DroidView
                                                 codec.QueueInputBuffer(id, 0, packet.Length, 0, Android.Media.MediaCodecBufferFlags.None);
                                                 using (var info = new Android.Media.MediaCodec.BufferInfo())
                                                 {
-                                                    int idx = codec.DequeueOutputBuffer(info, 0);
-                                                    if(idx>=0)
+                                                    while (true)
                                                     {
-                                                        codec.ReleaseOutputBuffer(idx, true);
+                                                        int idx = codec.DequeueOutputBuffer(info, 0);
+                                                        if (idx >= 0)
+                                                        {
+                                                            codec.ReleaseOutputBuffer(idx, true);
+                                                        }else
+                                                        {
+                                                            break;
+                                                        }
                                                     }
                                                 }
                                             }
