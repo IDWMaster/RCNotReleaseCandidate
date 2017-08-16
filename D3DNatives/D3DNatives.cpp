@@ -11,6 +11,7 @@
 #include <queue>
 #include <evr.h>
 #include <codecapi.h>
+#include <chrono>
 
 class VideoEncoder {
 public:
@@ -124,22 +125,31 @@ public:
 
 		
 	}
+	
 	int framecount = 0;
 	///<summary>Encodes a single frame of video</summary>
 	void WriteFrame(ID3D11Texture2D* frame) {
 		//TODO: Encode the video frame here.
 		//Format conversion
+		velociraptor:
 		IMFMediaEvent* evt = 0;
 		HRESULT res = generator->GetEvent(MF_EVENT_FLAG_NO_WAIT, &evt);
 		
 		if (!evt) {
 			return; //Drop frame -- pipeline not yet ready.
 		}
+
 		MediaEventType type;
 		evt->GetType(&type);
+		if (frame == 0 && type == METransformNeedInput) {
+			//Encoder is malfunctioning.
+			goto velociraptor;
+		}
 		switch (type) {
 		case METransformHaveOutput:
 		{
+			lastFrameTime = std::chrono::steady_clock::now();
+			framecount = 0;
 			DWORD status;
 			MFT_OUTPUT_DATA_BUFFER sample;
 			memset(&sample, 0, sizeof(sample));
@@ -159,6 +169,10 @@ public:
 			}
 			if (sample.pEvents) {
 				sample.pEvents->Release();
+			}
+			if (frame == 0) {
+				//draining
+				goto velociraptor;
 			}
 		}
 			break;
@@ -213,10 +227,18 @@ public:
 		case METransformDrainComplete: 
 		{
 			encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
+			framecount = 0;
 		}
 									   break;
 		}
 		evt->Release();
+	}
+	std::chrono::steady_clock::time_point lastFrameTime;
+	void Flush() {
+		if (framecount) {
+			encoder->ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0);
+			WriteFrame(0);
+		}
 	}
 };
 
@@ -306,7 +328,7 @@ public:
 		if (dupe) {
 			DXGI_OUTDUPL_FRAME_INFO desc;
 			IDXGIResource* resource = 0;
-			dupe->AcquireNextFrame(-1, &desc, &resource);
+			dupe->AcquireNextFrame(20, &desc, &resource);
 
 			if (resource) {
 				ID3D11Texture2D* tex = 0;
@@ -315,6 +337,10 @@ public:
 				tex->Release();
 				resource->Release();
 				dupe->ReleaseFrame();
+			}
+			else {
+				encoder->Flush();
+
 			}
 		}
 		else {
