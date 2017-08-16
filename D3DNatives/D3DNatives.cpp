@@ -21,34 +21,65 @@ public:
 	DWORD proc_out = 0;
 	IMFMediaEvent* evt = 0;
 	IMFMediaEventGenerator* generator = 0;
-	ID3D11Device* dev;
-	ID3D11DeviceContext* ctx;
+	ID3D11Device* dev = 0;
+	ID3D11DeviceContext* ctx = 0;
 	ID3D11VideoDevice* viddev = 0;
 	ID3D11VideoProcessor* processor = 0;
 	ID3D11VideoContext* vidcontext = 0;
+	ID3D11VideoProcessorEnumerator* enumerator = 0;
+	D3D11_VIDEO_PROCESSOR_STREAM streaminfo;
 	void(*packetCallback)(unsigned char*, int);
-	VideoEncoder(ID3D11Device* dev,ID3D11DeviceContext* ctx, void(*packetCallback)(unsigned char*, int)):dev(dev),ctx(ctx),packetCallback(packetCallback) {
+	VideoEncoder(ID3D11Device* dev, ID3D11DeviceContext* ctx, void(*packetCallback)(unsigned char*, int)) :dev(dev), ctx(ctx), packetCallback(packetCallback) {
 		MFStartup(MF_VERSION);
+		memset(&streaminfo, 0, sizeof(streaminfo));
+
 		dev->QueryInterface(&viddev);
 		D3D11_VIDEO_PROCESSOR_CONTENT_DESC procdesc;
 		procdesc.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
-		procdesc.InputFrameRate.Numerator = 25;
-		procdesc.InputFrameRate.Denominator = 1;
+		procdesc.InputFrameRate.Numerator = 0;
+		procdesc.InputFrameRate.Denominator = 0;
 		procdesc.InputWidth = 1920;
 		procdesc.InputHeight = 1080;
-		procdesc.OutputFrameRate.Numerator = 25;
-		procdesc.OutputFrameRate.Denominator = 1;
+		procdesc.OutputFrameRate.Numerator = 0;
+		procdesc.OutputFrameRate.Denominator = 0;
 		procdesc.OutputWidth = 1920;
 		procdesc.OutputHeight = 1080;
 		procdesc.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
-		ID3D11VideoProcessorEnumerator* enumerator = 0;
 		viddev->CreateVideoProcessorEnumerator(&procdesc, &enumerator);
+		UINT supportflags;
+		enumerator->CheckVideoProcessorFormat(DXGI_FORMAT_B8G8R8A8_UNORM,&supportflags);
 		//UINT vflags = 0;
 		//HRESULT vres = enumerator->CheckVideoProcessorFormat(DXGI_FORMAT_NV12,&vflags);
 		viddev->CreateVideoProcessor(enumerator, 0, &processor);
 		ctx->QueryInterface(&vidcontext);
+		vidcontext->VideoProcessorSetStreamFrameFormat(processor, 0, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE);
+		vidcontext->VideoProcessorSetStreamOutputRate(processor, 0, D3D11_VIDEO_PROCESSOR_OUTPUT_RATE_NORMAL, true, 0);
+		D3D11_VIDEO_COLOR backcolor;
+		backcolor.RGBA.A = 1;
+		backcolor.RGBA.B = 0;
+		backcolor.RGBA.G = 0;
+		backcolor.RGBA.R = 0;
+		vidcontext->VideoProcessorSetOutputBackgroundColor(processor, 0, &backcolor);
+		RECT angle;
+		angle.left = 0;
+		angle.top = 0;
+		angle.right = 1920;
+		angle.bottom = 1080;
+		vidcontext->VideoProcessorSetStreamSourceRect(processor, 0, true, &angle);
+		vidcontext->VideoProcessorSetStreamDestRect(processor, 0, true, &angle);
+		D3D11_VIDEO_PROCESSOR_COLOR_SPACE outerspace;
+		memset(&outerspace, 0, sizeof(outerspace)); //How to compute the sizeof(outerspace)
+		outerspace.YCbCr_xvYCC = 1;
+		vidcontext->VideoProcessorSetStreamColorSpace(processor, 0, &outerspace);
+		vidcontext->VideoProcessorSetOutputColorSpace(processor, &outerspace);
 		//TODO: Initialize
-		enumerator->Release();
+
+		streaminfo.Enable = true;
+		streaminfo.FutureFrames = 0;
+		streaminfo.InputFrameOrField = 0;
+		streaminfo.OutputIndex = 0;
+		streaminfo.PastFrames = 0;
+		
 
 
 		dev->AddRef();
@@ -117,7 +148,7 @@ public:
 	///<summary>Encodes a single frame of video</summary>
 	void WriteFrame(ID3D11Texture2D* frame) {
 		//TODO: Encode the video frame here.
-		
+		//Format conversion
 		IMFMediaEvent* evt = 0;
 		HRESULT res = generator->GetEvent(MF_EVENT_FLAG_NO_WAIT, &evt);
 		
@@ -156,15 +187,36 @@ public:
 			//DXGI_FORMAT_NV12
 			D3D11_TEXTURE2D_DESC ription;
 			frame->GetDesc(&ription);
+			ription.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_VIDEO_ENCODER;
 			ription.Format = DXGI_FORMAT_NV12;
+			ription.MiscFlags = 0;
 			ID3D11Texture2D* vidframe = 0;
 			dev->CreateTexture2D(&ription, 0, &vidframe);
+			D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC inputdesc = {};
+			inputdesc.FourCC = 0;
+			inputdesc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
+			inputdesc.Texture2D.ArraySlice = 0;
+			inputdesc.Texture2D.MipSlice = 0;
+			D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC outdesc = {};
+			outdesc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
+			outdesc.Texture2D.MipSlice = 0;
+			ID3D11VideoProcessorInputView* inputview = 0;
+			ID3D11VideoProcessorOutputView* outputview = 0;
+			
+			viddev->CreateVideoProcessorInputView(frame, enumerator, &inputdesc, &inputview);
+			viddev->CreateVideoProcessorOutputView(vidframe, enumerator, &outdesc, &outputview);
+		
+			streaminfo.pInputSurface = inputview;
+			//fail on ID3D11Device->Release();
+			HRESULT blt = vidcontext->VideoProcessorBlt(processor, outputview, 0, 1, &streaminfo);
+			inputview->Release();
+			outputview->Release();
+
 			IMFMediaBuffer* buffy = 0;
 			MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), vidframe, 0, false, &buffy);
 			IMFSample* sample = 0;
 			MFCreateSample(&sample);
 			sample->AddBuffer(buffy);
-			ctx->CopyResource(vidframe, frame);
 			
 			sample->SetSampleDuration(1000);
 			IMFMediaEvent* mevt = 0;
