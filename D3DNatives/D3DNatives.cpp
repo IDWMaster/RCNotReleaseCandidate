@@ -23,7 +23,6 @@ public:
 	DWORD isthe = 0;
 	DWORD proc_in = 0;
 	DWORD proc_out = 0;
-	IMFMediaEvent* evt = 0;
 	IMFMediaEventGenerator* generator = 0;
 	ID3D11Device* dev = 0;
 	ID3D11DeviceContext* ctx = 0;
@@ -126,6 +125,7 @@ public:
 		e = encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
 		
 		encodeThread = new std::thread([=]() {
+			//NOTE: Memory leak here
 			while (running) {
 				IMFMediaEvent* evt = 0;
 				generator->GetEvent(0, &evt);
@@ -160,13 +160,17 @@ public:
 				break;
 				case METransformNeedInput:
 				{
-					ID3D11Texture2D* vidframe = 0;
+					IMFSample* vidframe = 0;
 					{
 						std::unique_lock<std::mutex> l(mtx);
 						while (running) {
 							if (pendingFrames.size()) {
 								vidframe = pendingFrames.front();
+								pendingFrames.pop();
 								break;
+							}
+							else {
+								this->evt.wait(l);
 							}
 						}
 					}
@@ -176,21 +180,12 @@ public:
 
 
 					//DXGI_FORMAT_NV12
-					IMFMediaBuffer* buffy = 0;
-					MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), vidframe, 0, false, &buffy);
-					IMFSample* sample = 0;
-					MFCreateSample(&sample);
-					sample->AddBuffer(buffy);
-
-					sample->SetSampleDuration(100000);
-					IMFMediaEvent* mevt = 0;
-					HRESULT result = encoder->ProcessInput(isthe, sample, 0);
-					sample->Release();
+					HRESULT result = encoder->ProcessInput(isthe, vidframe, 0);
 					vidframe->Release();
-					buffy->Release();
 				}
 				break;
 				}
+				evt->Release();
 			}
 		});
 
@@ -201,7 +196,7 @@ public:
 
 
 
-	std::queue<ID3D11Texture2D*> pendingFrames;
+	std::queue<IMFSample*> pendingFrames;
 	std::condition_variable evt;
 	std::mutex mtx;
 	bool running = true;
@@ -216,111 +211,44 @@ public:
 	void WriteFrame(ID3D11Texture2D* frame) {
 		//TODO: Encode the video frame here.
 		//Format conversion
-		velociraptor:
-		IMFMediaEvent* evt = 0;
-		HRESULT res = generator->GetEvent(MF_EVENT_FLAG_NO_WAIT, &evt);
-		
-		if (!evt) {
-			return; //Drop frame -- pipeline not yet ready.
-		}
+		D3D11_TEXTURE2D_DESC ription;
+		frame->GetDesc(&ription);
+		ription.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_VIDEO_ENCODER;
+		ription.Format = DXGI_FORMAT_NV12;
+		ription.MiscFlags = 0;
+		ID3D11Texture2D* vidframe = 0;
+		dev->CreateTexture2D(&ription, 0, &vidframe);
+		D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC inputdesc = {};
+		inputdesc.FourCC = 0;
+		inputdesc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
+		inputdesc.Texture2D.ArraySlice = 0;
+		inputdesc.Texture2D.MipSlice = 0;
+		D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC outdesc = {};
+		outdesc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
+		outdesc.Texture2D.MipSlice = 0;
+		ID3D11VideoProcessorInputView* inputview = 0;
+		ID3D11VideoProcessorOutputView* outputview = 0;
 
-		MediaEventType type;
-		evt->GetType(&type);
-		if (frame == 0 && type == METransformNeedInput) {
-			//Encoder is malfunctioning.
-			goto velociraptor;
-		}
-		switch (type) {
-		case METransformHaveOutput:
-		{
-			DWORD status;
-			startOutput:
-			lastFrameTime = std::chrono::steady_clock::now();
-			framecount = 0;
-			MFT_OUTPUT_DATA_BUFFER sample;
-			memset(&sample, 0, sizeof(sample));
-			sample.dwStreamID = isthe;
-			encoder->ProcessOutput(0, 1, &sample, &status);
-			if (sample.pSample) {
-				IMFMediaBuffer* vampire = 0;
-				sample.pSample->GetBufferByIndex(0, &vampire);
-				DWORD maxlen = 0;
-				DWORD len = 0;
-				BYTE* me = 0;
-				vampire->Lock(&me, &maxlen, &len);
-				packetCallback(me, len);
-				vampire->Unlock();
-				vampire->Release();
-				sample.pSample->Release();
-			}
-			if (sample.pEvents) {
-				sample.pEvents->Release();
-			}
-			if (frame == 0) {
-				//draining
-				goto velociraptor;
-			}
-			if (sample.pSample) {
-				goto startOutput;
-			}
-		}
-			break;
-		case METransformNeedInput:
-		{
-			//DXGI_FORMAT_NV12
-			D3D11_TEXTURE2D_DESC ription;
-			frame->GetDesc(&ription);
-			ription.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_VIDEO_ENCODER;
-			ription.Format = DXGI_FORMAT_NV12;
-			ription.MiscFlags = 0;
-			ID3D11Texture2D* vidframe = 0;
-			dev->CreateTexture2D(&ription, 0, &vidframe);
-			D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC inputdesc = {};
-			inputdesc.FourCC = 0;
-			inputdesc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
-			inputdesc.Texture2D.ArraySlice = 0;
-			inputdesc.Texture2D.MipSlice = 0;
-			D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC outdesc = {};
-			outdesc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
-			outdesc.Texture2D.MipSlice = 0;
-			ID3D11VideoProcessorInputView* inputview = 0;
-			ID3D11VideoProcessorOutputView* outputview = 0;
-			
-			viddev->CreateVideoProcessorInputView(frame, enumerator, &inputdesc, &inputview);
-			viddev->CreateVideoProcessorOutputView(vidframe, enumerator, &outdesc, &outputview);
-		
-			streaminfo.pInputSurface = inputview;
-			HRESULT blt = vidcontext->VideoProcessorBlt(processor, outputview, 0, 1, &streaminfo);
-			inputview->Release();
-			outputview->Release();
+		viddev->CreateVideoProcessorInputView(frame, enumerator, &inputdesc, &inputview);
+		viddev->CreateVideoProcessorOutputView(vidframe, enumerator, &outdesc, &outputview);
 
-			IMFMediaBuffer* buffy = 0;
-			MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), vidframe, 0, false, &buffy);
-			IMFSample* sample = 0;
-			MFCreateSample(&sample);
-			sample->AddBuffer(buffy);
-			
-			sample->SetSampleDuration(100000);
-			IMFMediaEvent* mevt = 0;
-			HRESULT result = encoder->ProcessInput(isthe, sample, 0);
-			framecount++;
-			/*if (framecount > 1) {
-				framecount = 0;
-				encoder->ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0);
-			}*/
-			sample->Release();
-			vidframe->Release();
-			buffy->Release();
-		}
-			break;
-		case METransformDrainComplete: 
-		{
-			encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
-			framecount = 0;
-		}
-									   break;
-		}
-		evt->Release();
+		streaminfo.pInputSurface = inputview;
+		HRESULT blt = vidcontext->VideoProcessorBlt(processor, outputview, 0, 1, &streaminfo);
+		inputview->Release();
+		outputview->Release();
+
+		IMFMediaBuffer* buffy = 0;
+		MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), vidframe, 0, false, &buffy);
+		IMFSample* sample = 0;
+		MFCreateSample(&sample);
+		sample->AddBuffer(buffy);
+		sample->SetSampleDuration(100000);
+
+		buffy->Release();
+		vidframe->Release();
+		std::unique_lock<std::mutex> l(mtx);
+		pendingFrames.push(sample);
+		evt.notify_one();
 	}
 	std::chrono::steady_clock::time_point lastFrameTime;
 	void Flush() {
