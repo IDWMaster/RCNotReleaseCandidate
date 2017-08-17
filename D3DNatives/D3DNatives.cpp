@@ -31,8 +31,8 @@ public:
 	ID3D11VideoContext* vidcontext = 0;
 	ID3D11VideoProcessorEnumerator* enumerator = 0;
 	D3D11_VIDEO_PROCESSOR_STREAM streaminfo;
-	void(*packetCallback)(unsigned char*, int);
-	VideoEncoder(ID3D11Device* dev, ID3D11DeviceContext* ctx, void(*packetCallback)(unsigned char*, int)) :dev(dev), ctx(ctx), packetCallback(packetCallback) {
+	void(*packetCallback)(int64_t,unsigned char*, int);
+	VideoEncoder(ID3D11Device* dev, ID3D11DeviceContext* ctx, void(*packetCallback)(int64_t,unsigned char*, int)) :dev(dev), ctx(ctx), packetCallback(packetCallback) {
 		MFStartup(MF_VERSION);
 		memset(&streaminfo, 0, sizeof(streaminfo));
 
@@ -94,11 +94,11 @@ public:
 		MFCreateMediaType(&o);
 		o->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
 		o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
-		o->SetUINT32(MF_MT_AVG_BITRATE, 10000000*5); //TODO: Set this to available bandwidth on network link. Currently optimized for local transfers.
+		o->SetUINT32(MF_MT_AVG_BITRATE, 10000000); //TODO: Set this to available bandwidth on network link. Currently optimized for local transfers.
 		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 30, 1);
 		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Get from texture info
-		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_MixedInterlaceOrProgressive);
-		o->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Simple);
+		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+		o->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Main);
 		o->SetUINT32(CODECAPI_AVEncCommonRateControlMode, eAVEncCommonRateControlMode_LowDelayVBR);
 		UINT togepi = 0;
 		IMFDXGIDeviceManager* devmgr = 0;
@@ -113,7 +113,7 @@ public:
 		MFCreateMediaType(&o);
 		o->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
 		o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_ARGB32);
-		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_MixedInterlaceOrProgressive);
+		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
 		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Load from texture
 		MFSetAttributeRatio(o, MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
 		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 30, 1);
@@ -126,6 +126,7 @@ public:
 		
 		encodeThread = new std::thread([=]() {
 			//NOTE: Memory leak here
+			int pendingFrameCount = 0;
 			while (running) {
 				IMFMediaEvent* evt = 0;
 				generator->GetEvent(0, &evt);
@@ -134,9 +135,11 @@ public:
 				switch (type) {
 				case METransformHaveOutput:
 				{
+					pendingFrameCount--;
+					if (pendingFrameCount < 0) {
+						pendingFrameCount = 0;
+					}
 					DWORD status;
-					lastFrameTime = std::chrono::steady_clock::now();
-					framecount = 0;
 					MFT_OUTPUT_DATA_BUFFER sample;
 					memset(&sample, 0, sizeof(sample));
 					sample.dwStreamID = isthe;
@@ -148,7 +151,9 @@ public:
 						DWORD len = 0;
 						BYTE* me = 0;
 						vampire->Lock(&me, &maxlen, &len);
-						packetCallback(me, len);
+						LONGLONG duration; //it's a LONG LONG sample (sure have an awfully slow frame rate)!
+						sample.pSample->GetSampleTime(&duration);
+						packetCallback(duration,me, len);
 						vampire->Unlock();
 						vampire->Release();
 						sample.pSample->Release();
@@ -170,7 +175,19 @@ public:
 								break;
 							}
 							else {
-								this->evt.wait(l);
+								
+								if (lastBuffer) {
+									//Replay last buffer
+									MFCreateSample(&vidframe);
+									vidframe->AddBuffer(lastBuffer);
+									auto now = std::chrono::steady_clock::now();
+									vidframe->SetSampleDuration(std::chrono::duration_cast<std::chrono::microseconds> (now - lastFrameTime).count());
+									vidframe->SetSampleTime(std::chrono::duration_cast<std::chrono::microseconds> (now - refclock).count());
+									break;
+								}
+								else {
+									this->evt.wait(l);
+								}
 							}
 						}
 					}
@@ -178,12 +195,15 @@ public:
 						break;
 					}
 
-
+					pendingFrameCount++;
 					//DXGI_FORMAT_NV12
 					HRESULT result = encoder->ProcessInput(isthe, vidframe, 0);
 					vidframe->Release();
 				}
 				break;
+				case METransformDrainComplete:
+					encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
+					break;
 				}
 				evt->Release();
 			}
@@ -203,14 +223,16 @@ public:
 	std::thread* encodeThread;
 
 
-
-
-	
-	int framecount = 0;
+	IMFMediaBuffer* lastBuffer = 0;
+	std::chrono::steady_clock::time_point refclock = std::chrono::steady_clock::now();
+	std::chrono::steady_clock::time_point lastFrameTime = std::chrono::steady_clock::now();
 	///<summary>Encodes a single frame of video</summary>
 	void WriteFrame(ID3D11Texture2D* frame) {
 		//TODO: Encode the video frame here.
 		//Format conversion
+		IMFSample* sample = 0;
+		
+		
 		D3D11_TEXTURE2D_DESC ription;
 		frame->GetDesc(&ription);
 		ription.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_VIDEO_ENCODER;
@@ -239,24 +261,25 @@ public:
 
 		IMFMediaBuffer* buffy = 0;
 		MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), vidframe, 0, false, &buffy);
-		IMFSample* sample = 0;
+		
 		MFCreateSample(&sample);
 		sample->AddBuffer(buffy);
-		sample->SetSampleDuration(100000);
+		auto now = std::chrono::steady_clock::now();
+		sample->SetSampleDuration(std::chrono::duration_cast<std::chrono::microseconds> (now-lastFrameTime).count());
+		sample->SetSampleTime(std::chrono::duration_cast<std::chrono::microseconds> (now - refclock).count());
+		lastFrameTime = now;
 
-		buffy->Release();
-		vidframe->Release();
 		std::unique_lock<std::mutex> l(mtx);
+		if (lastBuffer) {
+			lastBuffer->Release();
+			lastBuffer = 0;
+		}
+		lastBuffer = buffy;
+		vidframe->Release();
 		pendingFrames.push(sample);
 		evt.notify_one();
 	}
-	std::chrono::steady_clock::time_point lastFrameTime;
-	void Flush() {
-		if (framecount) {
-			encoder->ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0);
-			WriteFrame(0);
-		}
-	}
+	
 };
 
 
@@ -284,7 +307,7 @@ public:
 
 	ID3D11Device* dev11 = 0;
 	ID3D11DeviceContext* ctx11 = 0;
-	WPFEngine(HWND ow, void(*packetCallback)(unsigned char*, int)) {
+	WPFEngine(HWND ow, void(*packetCallback)(int64_t,unsigned char*, int)) {
 		dupe = 0;
 		tex = 0; //if tex && !shareHandle then segfault?????
 		sharehandle = 0;
@@ -354,10 +377,6 @@ public:
 				tex->Release();
 				resource->Release();
 				dupe->ReleaseFrame();
-			}
-			else {
-				encoder->Flush();
-
 			}
 		}
 		else {
@@ -447,7 +466,7 @@ extern "C" {
 	__declspec(dllexport) void RecordFrame(WPFEngine* engine) {
 		engine->RecordFrame();
 	}
-	__declspec(dllexport) ENGINE_CONTEXT CreateEngine(HWND ow, void(*packetCallback)(unsigned char*, int)) {
+	__declspec(dllexport) ENGINE_CONTEXT CreateEngine(HWND ow, void(*packetCallback)(int64_t,unsigned char*, int)) {
 		ENGINE_CONTEXT ctx;
 		ctx.engine = new WPFEngine(ow,packetCallback);
 		ctx.surface = ctx.engine->surface; //Default to desktop

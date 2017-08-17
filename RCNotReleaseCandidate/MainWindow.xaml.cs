@@ -35,6 +35,7 @@ namespace RCNotReleaseCandidate
     public partial class MainWindow : Window
     {
         Stream str;
+        Stream debugStream = File.Create("C:\\cygwin64\\debug");
         TcpListener mlist;
         bool running = true;
         
@@ -70,7 +71,7 @@ namespace RCNotReleaseCandidate
             pevt.Set();
         }
 
-        delegate void CB(IntPtr data, int len);
+        delegate void CB(long timestamp,IntPtr data, int len);
         ENGINE_CONTEXT ctx;
         [SuppressUnmanagedCodeSecurity]
         [DllImport("D3DNatives.dll")]
@@ -115,16 +116,19 @@ namespace RCNotReleaseCandidate
                     }
                 });
                 netthread.Start();
-                ctx = CreateEngine(handle,(data,len)=> {
+                ctx = CreateEngine(handle,(timestamp,data,len)=> {
                     byte[] buffer = new byte[len];
                     Marshal.Copy(data, buffer, 0, len);
                     try
                     {
-                        BinaryWriter mwriter = new BinaryWriter(str);
+                        MemoryStream mstream = new MemoryStream();
+                        BinaryWriter mwriter = new BinaryWriter(mstream);
                         mwriter.Write((byte)0);
+                        mwriter.Write(timestamp);
                         mwriter.Write(buffer.Length);
                         mwriter.Write(buffer);
-                        //str.Flush();
+                        str.Write(mstream.ToArray(),0,(int)mstream.Length);
+                        debugStream.Write(mstream.ToArray(), 0, (int)mstream.Length);
                       /* lock(packets)
                         {
                             packets.Enqueue((mwriter.BaseStream as MemoryStream).ToArray());

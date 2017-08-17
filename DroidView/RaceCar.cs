@@ -31,6 +31,13 @@ namespace DroidView
         {
         }
     }
+
+    class PendingSurface
+    {
+        public long presentationTimestamp;
+        public int ID;
+    }
+
     [Activity(Label = "RaceCar")]
     public class RaceCar : Activity
     {
@@ -63,6 +70,47 @@ namespace DroidView
                 codec.SetOutputSurface(sview.Holder.Surface);
                 codec.Start();
 
+                Queue<PendingSurface> pendingFrames = new Queue<PendingSurface>();
+                AutoResetEvent evt = new AutoResetEvent(false);
+                System.Threading.Thread renderThread = new Thread(delegate () {
+                    long currentTimestamp = 0;
+                    //Time since last frame
+                    System.Diagnostics.Stopwatch mwatch = new System.Diagnostics.Stopwatch();
+
+                    while (running) {
+                        PendingSurface surface = null;
+                        lock (pendingFrames)
+                        {
+                            if(pendingFrames.Any())
+                            {
+                                surface = pendingFrames.Dequeue();
+                            }
+                        }
+                        if (surface == null)
+                        {
+                            evt.WaitOne();
+                        } else
+                        {
+                            if (currentTimestamp != 0)
+                            {
+                                int sleeptime = (int)(surface.presentationTimestamp-currentTimestamp);
+                                sleeptime -= (int)mwatch.ElapsedMilliseconds;
+                                mwatch.Reset();
+                                mwatch.Start();
+                                if (sleeptime>0)
+                                {
+                                    System.Threading.Thread.Sleep(sleeptime);
+                                }
+                            }
+                            currentTimestamp = surface.presentationTimestamp;
+                            codec.ReleaseOutputBuffer(surface.ID, true);
+                        }
+
+                    }
+                });
+                renderThread.Start();
+
+
                 BinaryReader mreader = new BinaryReader(connection);
                 System.Threading.Thread mthread = new Thread(delegate () {
                     while (running)
@@ -73,6 +121,7 @@ namespace DroidView
                             {
                                 case 0:
                                     {
+                                        long timestamp = mreader.ReadInt64();
                                         byte[] packet = mreader.ReadBytes(mreader.ReadInt32());
                                         int id = codec.DequeueInputBuffer(-1);
                                         using (var buffy = codec.GetInputBuffer(id))
@@ -80,7 +129,7 @@ namespace DroidView
                                             if (buffy.Capacity() >= packet.Length)
                                             {
                                                 Marshal.Copy(packet, 0, buffy.GetDirectBufferAddress(), packet.Length);
-                                                codec.QueueInputBuffer(id, 0, packet.Length, 0, Android.Media.MediaCodecBufferFlags.None);
+                                                codec.QueueInputBuffer(id, 0, packet.Length, timestamp, Android.Media.MediaCodecBufferFlags.None);
                                                 using (var info = new Android.Media.MediaCodec.BufferInfo())
                                                 {
                                                     while (true)
@@ -88,7 +137,12 @@ namespace DroidView
                                                         int idx = codec.DequeueOutputBuffer(info, 0);
                                                         if (idx >= 0)
                                                         {
-                                                            codec.ReleaseOutputBuffer(idx, true);
+                                                            var sval = new PendingSurface() { ID = idx, presentationTimestamp = info.PresentationTimeUs / 1000 };
+                                                            lock (pendingFrames)
+                                                            {
+                                                                pendingFrames.Enqueue(sval);
+                                                                evt.Set();
+                                                            }
                                                         }else
                                                         {
                                                             break;
