@@ -86,6 +86,7 @@ public:
 		UINT32 asyncs = 0;
 		monetaryfund->GetUINT32(MF_TRANSFORM_ASYNC, &asyncs);
 		monetaryfund->SetUINT32(MF_TRANSFORM_ASYNC_UNLOCK, true);
+		monetaryfund->SetUINT32(MF_LOW_LATENCY, true);
 		monetaryfund->Release();
 
 		IMFMediaType* o = 0;
@@ -94,8 +95,8 @@ public:
 		MFCreateMediaType(&o);
 		o->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
 		o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
-		o->SetUINT32(MF_MT_AVG_BITRATE, 10000000); //TODO: Set this to available bandwidth on network link. Currently optimized for local transfers.
-		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 30, 1);
+		o->SetUINT32(MF_MT_AVG_BITRATE, 10000000/2); //TODO: Set this to available bandwidth on network link. Currently optimized for local transfers.
+		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 60, 1);
 		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Get from texture info
 		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
 		o->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Main);
@@ -116,7 +117,7 @@ public:
 		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
 		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Load from texture
 		MFSetAttributeRatio(o, MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
-		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 30, 1);
+		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 60, 1);
 		e = encoder->SetInputType(thebird, o, 0);
 		o->Release();
 		DWORD flags;
@@ -270,6 +271,12 @@ public:
 		lastFrameTime = now;
 
 		std::unique_lock<std::mutex> l(mtx);
+		while (pendingFrames.size() > 3) {
+			IMFSample* sample = pendingFrames.front();
+			pendingFrames.pop();
+			sample->Release();
+			
+		}
 		if (lastBuffer) {
 			lastBuffer->Release();
 			lastBuffer = 0;

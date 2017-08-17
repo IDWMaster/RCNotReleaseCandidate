@@ -35,7 +35,7 @@ namespace RCNotReleaseCandidate
     public partial class MainWindow : Window
     {
         Stream str;
-        Stream debugStream = File.Create("C:\\cygwin64\\debug");
+        //Stream debugStream = File.Create("C:\\cygwin64\\debug");
         TcpListener mlist;
         bool running = true;
         
@@ -121,14 +121,14 @@ namespace RCNotReleaseCandidate
                     Marshal.Copy(data, buffer, 0, len);
                     try
                     {
-                        MemoryStream mstream = new MemoryStream();
-                        BinaryWriter mwriter = new BinaryWriter(mstream);
+                        //MemoryStream mstream = new MemoryStream();
+                        BinaryWriter mwriter = new BinaryWriter(str);
                         mwriter.Write((byte)0);
                         mwriter.Write(timestamp);
                         mwriter.Write(buffer.Length);
                         mwriter.Write(buffer);
-                        str.Write(mstream.ToArray(),0,(int)mstream.Length);
-                        debugStream.Write(mstream.ToArray(), 0, (int)mstream.Length);
+                        //str.Flush();
+                        //debugStream.Write(mstream.ToArray(), 0, (int)mstream.Length);
                       /* lock(packets)
                         {
                             packets.Enqueue((mwriter.BaseStream as MemoryStream).ToArray());

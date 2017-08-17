@@ -81,9 +81,10 @@ namespace DroidView
                         PendingSurface surface = null;
                         lock (pendingFrames)
                         {
-                            if(pendingFrames.Any())
+                            if(pendingFrames.Count>1)
                             {
                                 surface = pendingFrames.Dequeue();
+                                
                             }
                         }
                         if (surface == null)
@@ -99,7 +100,7 @@ namespace DroidView
                                 mwatch.Start();
                                 if (sleeptime>0)
                                 {
-                                    System.Threading.Thread.Sleep(sleeptime);
+                                   // System.Threading.Thread.Sleep(sleeptime);
                                 }
                             }
                             currentTimestamp = surface.presentationTimestamp;
@@ -108,7 +109,7 @@ namespace DroidView
 
                     }
                 });
-                renderThread.Start();
+               // renderThread.Start();
 
 
                 BinaryReader mreader = new BinaryReader(connection);
@@ -137,12 +138,13 @@ namespace DroidView
                                                         int idx = codec.DequeueOutputBuffer(info, 0);
                                                         if (idx >= 0)
                                                         {
-                                                            var sval = new PendingSurface() { ID = idx, presentationTimestamp = info.PresentationTimeUs / 1000 };
+                                                            /*var sval = new PendingSurface() { ID = idx, presentationTimestamp = info.PresentationTimeUs / 1000 };
                                                             lock (pendingFrames)
                                                             {
                                                                 pendingFrames.Enqueue(sval);
                                                                 evt.Set();
-                                                            }
+                                                            }*/
+                                                            codec.ReleaseOutputBuffer(idx, true);
                                                         }else
                                                         {
                                                             break;
