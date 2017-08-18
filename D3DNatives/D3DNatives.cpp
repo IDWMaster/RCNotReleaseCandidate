@@ -100,7 +100,6 @@ public:
 		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Get from texture info
 		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
 		o->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Main);
-		o->SetUINT32(CODECAPI_AVEncCommonRateControlMode, eAVEncCommonRateControlMode_LowDelayVBR);
 		UINT togepi = 0;
 		IMFDXGIDeviceManager* devmgr = 0;
 		MFCreateDXGIDeviceManager(&togepi, &devmgr);
@@ -464,6 +463,39 @@ typedef struct {
 	IDirect3DSurface9* surface;
 	WPFEngine* engine;
 } ENGINE_CONTEXT;
+
+class Injector {
+public:
+	BOOL s;
+	Injector() {
+		s = InitializeTouchInjection(32, TOUCH_FEEDBACK_DEFAULT);
+	}
+	void Touch(int op, int x, int y, int point) {
+		POINTER_TOUCH_INFO info = {};
+		info.orientation = 0;
+		info.pointerInfo.pointerType = PT_TOUCH;
+		info.pointerInfo.pointerId = point;
+		info.pointerInfo.pointerFlags = POINTER_FLAG_DOWN | POINTER_FLAG_INRANGE | POINTER_FLAG_INCONTACT;
+		info.touchMask = 0;
+		switch (op) {
+		case 1:
+			info.pointerInfo.pointerFlags = POINTER_FLAG_UP;
+			break;
+		case 2:
+			info.pointerInfo.pointerFlags &= ~POINTER_FLAG_DOWN;
+			info.pointerInfo.pointerFlags |= POINTER_FLAG_UPDATE;
+			break;
+		}
+		info.pointerInfo.ptPixelLocation.x = x;
+		info.pointerInfo.ptPixelLocation.y = y;
+		s = InjectTouchInput(1, &info);
+		
+		s = false;
+	}
+};
+
+static Injector touchInjector;
+
 extern "C" {
 
 	__declspec(dllexport) void DrawBackbuffer(WPFEngine* engine) {
@@ -478,6 +510,10 @@ extern "C" {
 		ctx.engine = new WPFEngine(ow,packetCallback);
 		ctx.surface = ctx.engine->surface; //Default to desktop
 		return ctx;
+	}
+
+	__declspec(dllexport) void DispatchInput(int type, int x, int y, int id) {
+		touchInjector.Touch(type, x, y, id);
 	}
 
 }

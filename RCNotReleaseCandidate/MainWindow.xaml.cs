@@ -81,6 +81,8 @@ namespace RCNotReleaseCandidate
         static extern void DrawBackbuffer(IntPtr context);
         [DllImport("D3DNatives.dll")]
         static extern void RecordFrame(IntPtr context);
+        [DllImport("D3DNatives.dll")]
+        static extern void DispatchInput(int type, int x, int y, int touchpoint);
         Queue<byte[]> packets = new Queue<byte[]>();
         System.Threading.AutoResetEvent pevt = new System.Threading.AutoResetEvent(false);
 
@@ -89,33 +91,6 @@ namespace RCNotReleaseCandidate
             IntPtr handle = new WindowInteropHelper(this).Handle;
             System.Threading.Thread updateThread = new System.Threading.Thread(delegate () {
 
-                System.Threading.Thread netthread = new System.Threading.Thread(delegate () {
-                    while(running)
-                    {
-                        try
-                        {
-                            byte[] packet = null;
-                            lock(packets)
-                            {
-                                if(packets.Any())
-                                {
-                                    packet = packets.Dequeue();
-                                }
-                            }
-                            if(packet == null)
-                            {
-                                pevt.WaitOne();
-                                continue;
-                            }
-                            str.Write(packet, 0, packet.Length);
-                            str.Flush();
-                        }catch(Exception er)
-                        {
-
-                        }
-                    }
-                });
-                netthread.Start();
                 ctx = CreateEngine(handle,(timestamp,data,len)=> {
                     byte[] buffer = new byte[len];
                     Marshal.Copy(data, buffer, 0, len);
@@ -127,7 +102,7 @@ namespace RCNotReleaseCandidate
                         mwriter.Write(timestamp);
                         mwriter.Write(buffer.Length);
                         mwriter.Write(buffer);
-                        //str.Flush();
+                        str.Flush();
                         //debugStream.Write(mstream.ToArray(), 0, (int)mstream.Length);
                       /* lock(packets)
                         {
@@ -196,6 +171,43 @@ namespace RCNotReleaseCandidate
         async void StreamOn()
         {
             recordMode = true;
+
+
+            System.Threading.Thread netthread = new System.Threading.Thread(delegate () {
+                BinaryReader mreader = new BinaryReader(str);
+                while (running && str != null)
+                {
+                    try
+                    {
+                        switch(mreader.ReadByte())
+                        {
+                            case 1:
+                                {
+                                    //Touchdown!
+                                    DispatchInput(0, mreader.ReadInt32(), mreader.ReadInt32(), mreader.ReadInt32());
+                                }
+                                break;
+                            case 2:
+                                {
+                                    //Touchup!
+                                    DispatchInput(1, mreader.ReadInt32(), mreader.ReadInt32(), mreader.ReadInt32());
+                                }
+                                break;
+                            case 3:
+                                {
+                                    //Touchmove!
+                                    DispatchInput(2, mreader.ReadInt32(), mreader.ReadInt32(), mreader.ReadInt32());
+                                }
+                                break;
+                        }
+                    }
+                    catch (Exception er)
+                    {
+                        break;
+                    }
+                }
+            });
+            netthread.Start();
         }
 
         private void MenuItem_Click(object sender, RoutedEventArgs e)
