@@ -5,13 +5,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:RCNotReleaseCandidate"
         mc:Ignorable="d"
-        Title="MainWindow" Height="350" Width="525">
+        Title="Remote Control server" Height="350" Width="525">
     <Grid>
-        <Menu>
-            <MenuItem Header="_File">
-                <MenuItem Header="_Connect" Click="MenuItem_Click"></MenuItem>
-            </MenuItem>
-        </Menu>
         <Image x:Name="drawTarget"></Image>
     </Grid>
 </Window>

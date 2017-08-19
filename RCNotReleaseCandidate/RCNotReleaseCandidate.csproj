@@ -76,14 +76,6 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
-    <Compile Include="ConnectDlg.xaml.cs">
-      <DependentUpon>ConnectDlg.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="VideoCodec.cs" />
-    <Page Include="ConnectDlg.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
     <Page Include="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>

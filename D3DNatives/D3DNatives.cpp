@@ -65,7 +65,6 @@ public:
 		
 
 
-		dev->AddRef();
 		MFT_REGISTER_TYPE_INFO info;
 		info.guidMajorType = MFMediaType_Video;
 		info.guidSubtype = MFVideoFormat_H264;
@@ -107,6 +106,7 @@ public:
 
 		HRESULT e = encoder->GetStreamIDs(1, &thebird, 1, &isthe);
 		e = encoder->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, ULONG_PTR(devmgr));
+		devmgr->Release();
 		e = encoder->SetOutputType(isthe,o,0);
 		o->Release();
 		o = 0;
@@ -123,13 +123,15 @@ public:
 		e = encoder->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, 0);
 		e = encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
 		e = encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
-		
+		//TODO: Encoder is causing memory leak.
 		encodeThread = new std::thread([=]() {
-			//NOTE: Memory leak here
 			int pendingFrameCount = 0;
 			while (running) {
 				IMFMediaEvent* evt = 0;
 				generator->GetEvent(0, &evt);
+				if (evt == 0) {
+					continue;
+				}
 				MediaEventType type;
 				evt->GetType(&type);
 				switch (type) {
@@ -208,9 +210,8 @@ public:
 				evt->Release();
 			}
 		});
-
-
 		
+
 	}
 
 
@@ -220,7 +221,7 @@ public:
 	std::condition_variable evt;
 	std::mutex mtx;
 	bool running = true;
-	std::thread* encodeThread;
+	std::thread* encodeThread = 0;
 
 
 	IMFMediaBuffer* lastBuffer = 0;
@@ -286,6 +287,46 @@ public:
 		evt.notify_one();
 	}
 	
+
+
+	~VideoEncoder() {
+		running = false;
+		evt.notify_all();
+		if (this->encoder) {
+			encoder->Release();
+			IMFShutdown* shutdown = 0;
+			encoder->QueryInterface(&shutdown);
+			shutdown->Shutdown();
+			shutdown->Release();
+		}
+		if (this->encodeThread) {
+			encodeThread->join();
+			delete encodeThread;
+		}
+		if (this->enumerator) {
+			enumerator->Release();
+		}
+		if (this->generator) {
+			generator->Release();
+		}
+		{
+			std::unique_lock<std::mutex> l(mtx);
+			while (pendingFrames.size()) {
+				IMFSample* sample = pendingFrames.front();
+				pendingFrames.pop();
+				sample->Release();
+			}
+		}
+		if (this->processor) {
+			processor->Release();
+		}
+		if (this->vidcontext) {
+			vidcontext->Release();
+		}
+		if (this->viddev) {
+			viddev->Release();
+		}
+	}
 };
 
 
@@ -313,7 +354,8 @@ public:
 
 	ID3D11Device* dev11 = 0;
 	ID3D11DeviceContext* ctx11 = 0;
-	WPFEngine(HWND ow, void(*packetCallback)(int64_t,unsigned char*, int)) {
+	void(*packetCallback)(int64_t, unsigned char*, int);
+	WPFEngine(HWND ow, void(*packetCallback)(int64_t, unsigned char*, int)):packetCallback(packetCallback) {
 		dupe = 0;
 		tex = 0; //if tex && !shareHandle then segfault?????
 		sharehandle = 0;
@@ -365,10 +407,11 @@ public:
 		adapter->Release();
 		dxgi->Release();
 		DrawBackbuffer();
-
+		//TODO: Memory leak caused in constructor of VideoEncoder (even with no frames being encoded)
 		encoder = new VideoEncoder(dev11,ctx11,packetCallback);
 	}
-	VideoEncoder* encoder;
+
+	VideoEncoder* encoder = 0;
 	///<summary>Takes a snapshot of the desktop and encodes it into a video frame</summary>
 	void RecordFrame() {
 		if (dupe) {
@@ -446,16 +489,22 @@ public:
 		intermediate->Release();
 		tex->Release();
 		dev->Release();
+		
+
+		ULONG refcount; 
 		if (dupe) {
-			dupe->Release();
+			refcount = dupe->Release();
 		}
 		if (dev11) {
 			dev11->Release();
 		}
-		if (ctx11) {
-			ctx11->Release();
+		
+		if (encoder) {
+			delete encoder;
 		}
-		delete encoder;
+		if (ctx11) {
+			refcount = ctx11->Release();
+		}
 	}
 };
 
@@ -515,5 +564,7 @@ extern "C" {
 	__declspec(dllexport) void DispatchInput(int type, int x, int y, int id) {
 		touchInjector.Touch(type, x, y, id);
 	}
-
+	__declspec(dllexport) void FreeEngine(WPFEngine* engine) {
+		delete engine;
+	}
 }

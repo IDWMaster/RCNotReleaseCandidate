@@ -37,6 +37,7 @@ namespace DroidView
                 }catch(Exception er)
                 {
                     btn.Text = "Connect";
+                btn.Enabled = true;
                     FindViewById<TextView>(Resource.Id.textView2).Text = er.Message;
                 mclient.Dispose();
             }
