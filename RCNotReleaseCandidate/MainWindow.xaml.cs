@@ -23,7 +23,7 @@ using System.Security;
 namespace RCNotReleaseCandidate
 {
 
-    struct ENGINE_CONTEXT
+    public struct ENGINE_CONTEXT
     {
         public IntPtr surface; //IDirect3DSurface9*
         public IntPtr handle; //Handle to engine
@@ -84,20 +84,25 @@ namespace RCNotReleaseCandidate
             pevt.Set();
         }
 
-        delegate void CB(long timestamp,IntPtr data, int len);
+        public delegate void CB(long timestamp,IntPtr data, int len);
         ENGINE_CONTEXT ctx;
         [SuppressUnmanagedCodeSecurity]
         [DllImport("D3DNatives.dll")]
-        static extern ENGINE_CONTEXT CreateEngine(IntPtr window, CB callback);
+        public static extern ENGINE_CONTEXT CreateEngine(IntPtr window, CB callback);
         [SuppressUnmanagedCodeSecurity]
         [DllImport("D3DNatives.dll")]
-        static extern void DrawBackbuffer(IntPtr context);
+        public static extern void DrawBackbuffer(IntPtr context);
+        [SuppressUnmanagedCodeSecurity]
         [DllImport("D3DNatives.dll")]
-        static extern void RecordFrame(IntPtr context);
+        public static extern void RecordFrame(IntPtr context);
+        [SuppressUnmanagedCodeSecurity]
         [DllImport("D3DNatives.dll")]
-        static extern void DispatchInput(int type, int x, int y, int touchpoint);
+        public static extern void SendPacket(IntPtr context, IntPtr packet, int len);
+        [SuppressUnmanagedCodeSecurity]
         [DllImport("D3DNatives.dll")]
-        static extern void FreeEngine(IntPtr context);
+        public static extern void DispatchInput(int type, int x, int y, int touchpoint);
+        [DllImport("D3DNatives.dll")]
+        public static extern void FreeEngine(IntPtr context);
         Queue<byte[]> packets = new Queue<byte[]>();
         System.Threading.AutoResetEvent pevt = new System.Threading.AutoResetEvent(false);
 
