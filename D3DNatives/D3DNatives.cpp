@@ -77,21 +77,35 @@ public:
 		UINT32 codelen;
 		//MFTEnumEx(MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG_HARDWARE, 0, &info, &codes, &codelen);
 		MFTEnumEx(MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG_HARDWARE, 0, &info, &codes, &codelen);
-		codes[0]->ActivateObject(__uuidof(IMFTransform), (void**)&encoder);
+		HRESULT e = S_OK;
+		IMFDXGIDeviceManager* devmgr = 0;
+		UINT togepi = 0;
+		MFCreateDXGIDeviceManager(&togepi, &devmgr);
+		devmgr->ResetDevice(dev, togepi);
+		for (size_t i = 0; i < codelen; i++) {
+			codes[i]->ActivateObject(__uuidof(IMFTransform), (void**)&encoder);
+			IMFAttributes* monetaryfund = 0;
+			encoder->GetAttributes(&monetaryfund);
+			UINT32 asyncs = 0;
+			monetaryfund->GetUINT32(MF_TRANSFORM_ASYNC, &asyncs);
+			monetaryfund->SetUINT32(MF_TRANSFORM_ASYNC_UNLOCK, true);
+			monetaryfund->SetUINT32(MF_LOW_LATENCY, true);
+			monetaryfund->Release();
+			e = encoder->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, ULONG_PTR(devmgr));
+			if (e == S_OK) {
+				break;
+			}
+			encoder->Release();
+		}
 		for (size_t i = 0; i < codelen; i++) {
 			codes[i]->Release();
 		}
 		CoTaskMemFree(codes);
 
 		encoder->QueryInterface(&generator);
-		IMFAttributes* monetaryfund = 0;
+		
 
-		encoder->GetAttributes(&monetaryfund);
-		UINT32 asyncs = 0;
-		monetaryfund->GetUINT32(MF_TRANSFORM_ASYNC, &asyncs);
-		monetaryfund->SetUINT32(MF_TRANSFORM_ASYNC_UNLOCK, true);
-		monetaryfund->SetUINT32(MF_LOW_LATENCY, true);
-		monetaryfund->Release();
+		
 
 		IMFMediaType* o = 0;
 		
@@ -104,13 +118,11 @@ public:
 		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Get from texture info
 		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
 		o->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Main);
-		UINT togepi = 0;
-		IMFDXGIDeviceManager* devmgr = 0;
-		MFCreateDXGIDeviceManager(&togepi, &devmgr);
-		devmgr->ResetDevice(dev, togepi);
+		
+		
 
-		HRESULT e = encoder->GetStreamIDs(1, &thebird, 1, &isthe);
-		e = encoder->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, ULONG_PTR(devmgr));
+		e = encoder->GetStreamIDs(1, &thebird, 1, &isthe);
+		
 		devmgr->Release();
 		e = encoder->SetOutputType(isthe,o,0);
 		o->Release();
@@ -274,7 +286,7 @@ public:
 		sample->SetSampleDuration(std::chrono::duration_cast<std::chrono::microseconds> (now-lastFrameTime).count());
 		sample->SetSampleTime(std::chrono::duration_cast<std::chrono::microseconds> (now - refclock).count());
 		lastFrameTime = now;
-
+		
 		std::unique_lock<std::mutex> l(mtx);
 		while (pendingFrames.size() > 3) {
 			IMFSample* sample = pendingFrames.front();
@@ -655,7 +667,8 @@ public:
 				encoder->WriteFrame(tex);
 				tex->Release();
 				resource->Release();
-				dupe->ReleaseFrame();
+				dupe->ReleaseFrame(); //TODO: This deadlocks with ProccessInput (causing internal driver deadlock due to pipeline state dependency)
+				printf("released");
 			}
 		}
 		else {
