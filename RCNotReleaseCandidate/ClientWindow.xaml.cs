@@ -44,7 +44,7 @@ namespace RCNotReleaseCandidate
         {
             InitializeComponent();
             cb = onPacket;
-
+            hostname.Focus();
         }
 
         Stream str;
