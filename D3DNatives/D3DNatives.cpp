@@ -20,10 +20,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <wmcodecdsp.h>
 
 class VideoEncoder {
 public:
 	IMFTransform* encoder = 0;
+	IMFTransform* converter = 0;
 	DWORD thebird = 0;
 	DWORD isthe = 0;
 	DWORD proc_in = 0;
@@ -83,6 +85,26 @@ public:
 		UINT togepi = 0;
 		MFCreateDXGIDeviceManager(&togepi, &devmgr);
 		devmgr->ResetDevice(dev, togepi);
+
+		CoCreateInstance(CLSID_VideoProcessorMFT, 0, CLSCTX_INPROC_SERVER, IID_IMFTransform, (void**)&converter);
+		{
+			IMFMediaType* o = 0;
+			MFCreateMediaType(&o);
+			o->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+			o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_ARGB32);
+			MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Get from texture info
+			HRESULT e = converter->SetInputType(0, o, 0);
+			o->Release();
+			o = 0;
+			MFCreateMediaType(&o);
+			o->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+			o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
+			MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Get from texture info
+			e = converter->SetOutputType(0, o, 0);
+			
+			e = converter->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
+			o->Release();
+		}
 		for (size_t i = 0; i < codelen; i++) {
 			codes[i]->ActivateObject(__uuidof(IMFTransform), (void**)&encoder);
 			IMFAttributes* monetaryfund = 0;
@@ -93,7 +115,7 @@ public:
 			monetaryfund->SetUINT32(MF_LOW_LATENCY, true);
 			monetaryfund->Release();
 			e = encoder->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, ULONG_PTR(devmgr));
-			if (e == S_OK) {
+			if (e == S_OK || !viddev) {
 				break;
 			}
 			encoder->Release();
@@ -102,9 +124,9 @@ public:
 			codes[i]->Release();
 		}
 		CoTaskMemFree(codes);
-
-		encoder->QueryInterface(&generator);
-		
+		if (viddev) {
+			encoder->QueryInterface(&generator);
+		}
 
 		
 
@@ -142,93 +164,94 @@ public:
 		e = encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
 		e = encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
 		//TODO: Encoder is causing memory leak.
-		encodeThread = new std::thread([=]() {
-			int pendingFrameCount = 0;
-			while (running) {
-				IMFMediaEvent* evt = 0;
-				generator->GetEvent(0, &evt);
-				if (evt == 0) {
-					continue;
-				}
-				MediaEventType type;
-				evt->GetType(&type);
-				switch (type) {
-				case METransformHaveOutput:
-				{
-					pendingFrameCount--;
-					if (pendingFrameCount < 0) {
-						pendingFrameCount = 0;
+		if (viddev) {
+			encodeThread = new std::thread([=]() {
+				int pendingFrameCount = 0;
+				while (running) {
+					IMFMediaEvent* evt = 0;
+					generator->GetEvent(0, &evt);
+					if (evt == 0) {
+						continue;
 					}
-					DWORD status;
-					MFT_OUTPUT_DATA_BUFFER sample;
-					memset(&sample, 0, sizeof(sample));
-					sample.dwStreamID = isthe;
-					encoder->ProcessOutput(0, 1, &sample, &status);
-					if (sample.pSample) {
-						IMFMediaBuffer* vampire = 0;
-						sample.pSample->GetBufferByIndex(0, &vampire);
-						DWORD maxlen = 0;
-						DWORD len = 0;
-						BYTE* me = 0;
-						vampire->Lock(&me, &maxlen, &len);
-						LONGLONG duration; //it's a LONG LONG sample (sure have an awfully slow frame rate)!
-						sample.pSample->GetSampleTime(&duration);
-						packetCallback(duration,me, len);
-						vampire->Unlock();
-						vampire->Release();
-						sample.pSample->Release();
-					}
-					if (sample.pEvents) {
-						sample.pEvents->Release();
-					}
-				}
-				break;
-				case METransformNeedInput:
-				{
-					IMFSample* vidframe = 0;
+					MediaEventType type;
+					evt->GetType(&type);
+					switch (type) {
+					case METransformHaveOutput:
 					{
-						std::unique_lock<std::mutex> l(mtx);
-						while (running) {
-							if (pendingFrames.size()) {
-								vidframe = pendingFrames.front();
-								pendingFrames.pop();
-								break;
-							}
-							else {
-								
-								if (lastBuffer) {
-									//Replay last buffer
-									MFCreateSample(&vidframe);
-									vidframe->AddBuffer(lastBuffer);
-									auto now = std::chrono::steady_clock::now();
-									vidframe->SetSampleDuration(std::chrono::duration_cast<std::chrono::microseconds> (now - lastFrameTime).count());
-									vidframe->SetSampleTime(std::chrono::duration_cast<std::chrono::microseconds> (now - refclock).count());
+						pendingFrameCount--;
+						if (pendingFrameCount < 0) {
+							pendingFrameCount = 0;
+						}
+						DWORD status;
+						MFT_OUTPUT_DATA_BUFFER sample;
+						memset(&sample, 0, sizeof(sample));
+						sample.dwStreamID = isthe;
+						encoder->ProcessOutput(0, 1, &sample, &status);
+						if (sample.pSample) {
+							IMFMediaBuffer* vampire = 0;
+							sample.pSample->GetBufferByIndex(0, &vampire);
+							DWORD maxlen = 0;
+							DWORD len = 0;
+							BYTE* me = 0;
+							vampire->Lock(&me, &maxlen, &len);
+							LONGLONG duration; //it's a LONG LONG sample (sure have an awfully slow frame rate)!
+							sample.pSample->GetSampleTime(&duration);
+							packetCallback(duration, me, len);
+							vampire->Unlock();
+							vampire->Release();
+							sample.pSample->Release();
+						}
+						if (sample.pEvents) {
+							sample.pEvents->Release();
+						}
+					}
+					break;
+					case METransformNeedInput:
+					{
+						IMFSample* vidframe = 0;
+						{
+							std::unique_lock<std::mutex> l(mtx);
+							while (running) {
+								if (pendingFrames.size()) {
+									vidframe = pendingFrames.front();
+									pendingFrames.pop();
 									break;
 								}
 								else {
-									this->evt.wait(l);
+
+									if (lastBuffer) {
+										//Replay last buffer
+										MFCreateSample(&vidframe);
+										vidframe->AddBuffer(lastBuffer);
+										auto now = std::chrono::steady_clock::now();
+										vidframe->SetSampleDuration(std::chrono::duration_cast<std::chrono::microseconds> (now - lastFrameTime).count());
+										vidframe->SetSampleTime(std::chrono::duration_cast<std::chrono::microseconds> (now - refclock).count());
+										break;
+									}
+									else {
+										this->evt.wait(l);
+									}
 								}
 							}
 						}
+						if (!vidframe) {
+							break;
+						}
+
+						pendingFrameCount++;
+						//DXGI_FORMAT_NV12
+						HRESULT result = encoder->ProcessInput(isthe, vidframe, 0);
+						vidframe->Release();
 					}
-					if (!vidframe) {
+					break;
+					case METransformDrainComplete:
+						encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
 						break;
 					}
-
-					pendingFrameCount++;
-					//DXGI_FORMAT_NV12
-					HRESULT result = encoder->ProcessInput(isthe, vidframe, 0);
-					vidframe->Release();
+					evt->Release();
 				}
-				break;
-				case METransformDrainComplete:
-					encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
-					break;
-				}
-				evt->Release();
-			}
-		});
-		
+			});
+		}
 
 	}
 
@@ -249,60 +272,128 @@ public:
 	void WriteFrame(ID3D11Texture2D* frame) {
 		//TODO: Encode the video frame here.
 		//Format conversion
-		IMFSample* sample = 0;
-		
-		
-		D3D11_TEXTURE2D_DESC ription;
-		frame->GetDesc(&ription);
-		ription.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_VIDEO_ENCODER;
-		ription.Format = DXGI_FORMAT_NV12;
-		ription.MiscFlags = 0;
-		ID3D11Texture2D* vidframe = 0;
-		dev->CreateTexture2D(&ription, 0, &vidframe);
-		D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC inputdesc = {};
-		inputdesc.FourCC = 0;
-		inputdesc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
-		inputdesc.Texture2D.ArraySlice = 0;
-		inputdesc.Texture2D.MipSlice = 0;
-		D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC outdesc = {};
-		outdesc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
-		outdesc.Texture2D.MipSlice = 0;
-		ID3D11VideoProcessorInputView* inputview = 0;
-		ID3D11VideoProcessorOutputView* outputview = 0;
+		if (viddev) {
+			IMFSample* sample = 0;
 
-		viddev->CreateVideoProcessorInputView(frame, enumerator, &inputdesc, &inputview);
-		viddev->CreateVideoProcessorOutputView(vidframe, enumerator, &outdesc, &outputview);
 
-		streaminfo.pInputSurface = inputview;
-		HRESULT blt = vidcontext->VideoProcessorBlt(processor, outputview, 0, 1, &streaminfo);
-		inputview->Release();
-		outputview->Release();
+			D3D11_TEXTURE2D_DESC ription;
+			frame->GetDesc(&ription);
+			ription.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_VIDEO_ENCODER;
+			ription.Format = DXGI_FORMAT_NV12;
+			ription.MiscFlags = 0;
+			ID3D11Texture2D* vidframe = 0;
+			dev->CreateTexture2D(&ription, 0, &vidframe);
+			D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC inputdesc = {};
+			inputdesc.FourCC = 0;
+			inputdesc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
+			inputdesc.Texture2D.ArraySlice = 0;
+			inputdesc.Texture2D.MipSlice = 0;
+			D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC outdesc = {};
+			outdesc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
+			outdesc.Texture2D.MipSlice = 0;
+			ID3D11VideoProcessorInputView* inputview = 0;
+			ID3D11VideoProcessorOutputView* outputview = 0;
 
-		IMFMediaBuffer* buffy = 0;
-		MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), vidframe, 0, false, &buffy);
-		
-		MFCreateSample(&sample);
-		sample->AddBuffer(buffy);
-		auto now = std::chrono::steady_clock::now();
-		sample->SetSampleDuration(std::chrono::duration_cast<std::chrono::microseconds> (now-lastFrameTime).count());
-		sample->SetSampleTime(std::chrono::duration_cast<std::chrono::microseconds> (now - refclock).count());
-		lastFrameTime = now;
-		
-		std::unique_lock<std::mutex> l(mtx);
-		while (pendingFrames.size() > 3) {
-			IMFSample* sample = pendingFrames.front();
-			pendingFrames.pop();
-			sample->Release();
+			viddev->CreateVideoProcessorInputView(frame, enumerator, &inputdesc, &inputview);
+			viddev->CreateVideoProcessorOutputView(vidframe, enumerator, &outdesc, &outputview);
+
+			streaminfo.pInputSurface = inputview;
+			HRESULT blt = vidcontext->VideoProcessorBlt(processor, outputview, 0, 1, &streaminfo);
+			inputview->Release();
+			outputview->Release();
+
+			IMFMediaBuffer* buffy = 0;
+			MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), vidframe, 0, false, &buffy);
+
+			MFCreateSample(&sample);
+			sample->AddBuffer(buffy);
+			auto now = std::chrono::steady_clock::now();
+			sample->SetSampleDuration(std::chrono::duration_cast<std::chrono::microseconds> (now - lastFrameTime).count());
+			sample->SetSampleTime(std::chrono::duration_cast<std::chrono::microseconds> (now - refclock).count());
+			lastFrameTime = now;
+
+			std::unique_lock<std::mutex> l(mtx);
+			while (pendingFrames.size() > 3) {
+				IMFSample* sample = pendingFrames.front();
+				pendingFrames.pop();
+				sample->Release();
+
+			}
+			if (lastBuffer) {
+				lastBuffer->Release();
+				lastBuffer = 0;
+			}
+			lastBuffer = buffy;
+			vidframe->Release();
+			pendingFrames.push(sample);
+			evt.notify_one();
+		}
+		else {
+			//Software encode
+			ID3D11Texture2D* cputex = 0;
+			D3D11_TEXTURE2D_DESC ription;
+			frame->GetDesc(&ription);
+			ription.MiscFlags = 0;
+			ription.BindFlags = 0;
+			ription.Usage = D3D11_USAGE_STAGING;
+			ription.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+			ription.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+			dev->CreateTexture2D(&ription, 0, &cputex);
+			ctx->CopyResource(cputex, frame);
+			D3D11_MAPPED_SUBRESOURCE mapped = {};
 			
+			IMFMediaBuffer* buffy = 0;
+			MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), cputex, 0, false, &buffy);
+			cputex->Release();
+			IMFSample* sample = 0;
+			MFCreateSample(&sample);
+			sample->AddBuffer(buffy);
+			buffy->Release();
+			auto now = std::chrono::steady_clock::now();
+			sample->SetSampleDuration(std::chrono::duration_cast<std::chrono::microseconds> (now - lastFrameTime).count());
+			sample->SetSampleTime(std::chrono::duration_cast<std::chrono::microseconds> (now - refclock).count());
+			lastFrameTime = now;
+			HRESULT res = converter->ProcessInput(0, sample, 0);
+			sample->Release();
+			sample = 0;
+			DWORD mac = 0; //MAC == status symbol
+			MFT_OUTPUT_DATA_BUFFER slayer = {}; //MFT must provide output samples
+			MFCreateSample(&sample);
+			buffy = 0;
+			
+			MFCreate2DMediaBuffer(1920, 1080, MFVideoFormat_NV12.Data1, false, &buffy);
+			sample->AddBuffer(buffy);
+			buffy->Release();
+			slayer.pSample = sample;
+			res = converter->ProcessOutput(0, 1, &slayer, &mac);
+			//TODO: Memory leak below!
+			res = encoder->ProcessInput(0, sample, 0);
+			mac = 0;
+			sample->Release();
+			sample = 0;
+			MFT_OUTPUT_STREAM_INFO outinfo;
+			encoder->GetOutputStreamInfo(0, &outinfo);
+			buffy = 0;
+			slayer = {};
+			MFCreateMemoryBuffer(outinfo.cbSize, &buffy);
+			MFCreateSample(&sample);
+			sample->AddBuffer(buffy);
+			slayer.pSample = sample;
+			res = encoder->ProcessOutput(0, 1, &slayer, &mac);
+			if (res == S_OK) {
+				int64_t timestamp = 0;
+				sample->GetSampleTime(&timestamp); //TODO: Time is always 0 here.
+				unsigned char* data = 0;
+				DWORD maxlen = 0;
+				DWORD len = 0;
+				buffy->Lock(&data, &maxlen, &len);
+				packetCallback(timestamp, data, len);
+				buffy->Unlock();
+			}
+			buffy->Release();
+			sample->Release();
+		
 		}
-		if (lastBuffer) {
-			lastBuffer->Release();
-			lastBuffer = 0;
-		}
-		lastBuffer = buffy;
-		vidframe->Release();
-		pendingFrames.push(sample);
-		evt.notify_one();
 	}
 	
 
@@ -310,12 +401,17 @@ public:
 	~VideoEncoder() {
 		running = false;
 		evt.notify_all();
+		if (converter) {
+			converter->Release();
+		}
 		if (this->encoder) {
 			encoder->Release();
 			IMFShutdown* shutdown = 0;
-			encoder->QueryInterface(&shutdown);
-			shutdown->Shutdown();
-			shutdown->Release();
+			if (shutdown) {
+				encoder->QueryInterface(&shutdown);
+				shutdown->Shutdown();
+				shutdown->Release();
+			}
 		}
 		if (this->encodeThread) {
 			encodeThread->join();
