@@ -458,33 +458,34 @@ public:
 		memset(&streaminfo, 0, sizeof(streaminfo));
 
 		dev->QueryInterface(&viddev);
-		D3D11_VIDEO_PROCESSOR_CONTENT_DESC procdesc;
-		procdesc.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
-		procdesc.InputFrameRate.Numerator = 0;
-		procdesc.InputFrameRate.Denominator = 0;
-		procdesc.InputWidth = 1920;
-		procdesc.InputHeight = 1080;
-		procdesc.OutputFrameRate.Numerator = 0;
-		procdesc.OutputFrameRate.Denominator = 0;
-		procdesc.OutputWidth = 1920;
-		procdesc.OutputHeight = 1080;
-		procdesc.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
-		viddev->CreateVideoProcessorEnumerator(&procdesc, &enumerator);
-		viddev->CreateVideoProcessor(enumerator, 0, &processor);
-		ctx->QueryInterface(&vidcontext);
-		D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC outdesc;
-		outdesc.Texture2D.MipSlice = 0;
-		outdesc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
-		viddev->CreateVideoProcessorOutputView(rawframe, enumerator, &outdesc, &outview);
-		//TODO: Initialize
+		if (viddev) {
+			D3D11_VIDEO_PROCESSOR_CONTENT_DESC procdesc;
+			procdesc.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
+			procdesc.InputFrameRate.Numerator = 0;
+			procdesc.InputFrameRate.Denominator = 0;
+			procdesc.InputWidth = 1920;
+			procdesc.InputHeight = 1080;
+			procdesc.OutputFrameRate.Numerator = 0;
+			procdesc.OutputFrameRate.Denominator = 0;
+			procdesc.OutputWidth = 1920;
+			procdesc.OutputHeight = 1080;
+			procdesc.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
+			viddev->CreateVideoProcessorEnumerator(&procdesc, &enumerator);
+			viddev->CreateVideoProcessor(enumerator, 0, &processor);
+			ctx->QueryInterface(&vidcontext);
+			D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC outdesc;
+			outdesc.Texture2D.MipSlice = 0;
+			outdesc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
+			viddev->CreateVideoProcessorOutputView(rawframe, enumerator, &outdesc, &outview);
+			//TODO: Initialize
 
-		streaminfo.Enable = true;
-		streaminfo.FutureFrames = 0;
-		streaminfo.InputFrameOrField = 0;
-		streaminfo.OutputIndex = 0;
-		streaminfo.PastFrames = 0;
+			streaminfo.Enable = true;
+			streaminfo.FutureFrames = 0;
+			streaminfo.InputFrameOrField = 0;
+			streaminfo.OutputIndex = 0;
+			streaminfo.PastFrames = 0;
 
-
+		}
 
 		MFT_REGISTER_TYPE_INFO info;
 		info.guidMajorType = MFMediaType_Video;
@@ -504,7 +505,9 @@ public:
 		UINT32 asyncs = 0;
 		//monetaryfund->GetUINT32(MF_TRANSFORM_ASYNC, &asyncs);
 		monetaryfund->SetUINT32(MF_LOW_LATENCY, true);
-		HRESULT sv = monetaryfund->SetUINT32(CODECAPI_AVDecVideoAcceleration_H264, 1);
+		if (viddev) {
+			HRESULT sv = monetaryfund->SetUINT32(CODECAPI_AVDecVideoAcceleration_H264, 1);
+		}
 		monetaryfund->Release();
 
 		IMFMediaType* o = 0;
@@ -525,7 +528,9 @@ public:
 		devmgr->ResetDevice(dev, togepi);
 
 		HRESULT e = encoder->GetStreamIDs(1, &thebird, 1, &isthe);
-		e = encoder->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, ULONG_PTR(devmgr));
+		if (viddev) {
+			e = encoder->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, ULONG_PTR(devmgr));
+		}
 		devmgr->Release();
 		
 		e = encoder->SetInputType(thebird, o, 0);
