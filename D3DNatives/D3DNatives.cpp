@@ -165,7 +165,7 @@ public:
 		e = encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
 		//TODO: Encoder is causing memory leak.
 		
-
+		
 	}
 	IMFMediaEvent* pendingEvent = 0;
 	void PushFrame() {
@@ -252,12 +252,28 @@ public:
 	bool running = true;
 	std::thread* encodeThread = 0;
 
-
-	IMFMediaBuffer* lastBuffer = 0;
+	ID3D11Texture2D* prevframe = 0;
 	std::chrono::steady_clock::time_point refclock = std::chrono::steady_clock::now();
 	std::chrono::steady_clock::time_point lastFrameTime = std::chrono::steady_clock::now();
 	///<summary>Encodes a single frame of video</summary>
 	void WriteFrame(ID3D11Texture2D* frame) {
+		if (!prevframe) {
+			D3D11_TEXTURE2D_DESC ription;
+			frame->GetDesc(&ription);
+			ription.MiscFlags = 0;
+			ription.ArraySize = 1;
+			ription.MipLevels = 1;
+			ription.SampleDesc.Count = 1;
+			ription.Usage = D3D11_USAGE_DEFAULT;
+			ription.BindFlags = D3D11_BIND_RENDER_TARGET;
+
+			dev->CreateTexture2D(&ription, 0, &prevframe);
+		}
+		if (!frame) {
+			frame = prevframe;
+		} else {
+			ctx->CopyResource(prevframe, frame);
+		}
 		//TODO: Encode the video frame here.
 		//Format conversion
 		if (viddev) {
@@ -307,11 +323,7 @@ public:
 				sample->Release();
 
 			}
-			if (lastBuffer) {
-				lastBuffer->Release();
-				lastBuffer = 0;
-			}
-			lastBuffer = buffy;
+			buffy->Release();
 			vidframe->Release();
 			pendingFrames.push(sample);
 			PushFrame();
@@ -387,6 +399,9 @@ public:
 
 
 	~VideoEncoder() {
+		if (prevframe) {
+			prevframe->Release();
+		}
 		running = false;
 		evt.notify_all();
 		if (converter) {
@@ -762,6 +777,9 @@ public:
 				resource->Release();
 				dupe->ReleaseFrame(); //TODO: This deadlocks with ProccessInput (causing internal driver deadlock due to pipeline state dependency)
 				printf("released");
+			}
+			else {
+				encoder->WriteFrame(0);
 			}
 		}
 		else {
