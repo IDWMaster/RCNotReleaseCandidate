@@ -164,95 +164,83 @@ public:
 		e = encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
 		e = encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
 		//TODO: Encoder is causing memory leak.
-		if (viddev) {
-			encodeThread = new std::thread([=]() {
-				int pendingFrameCount = 0;
-				while (running) {
-					IMFMediaEvent* evt = 0;
-					generator->GetEvent(0, &evt);
-					if (evt == 0) {
-						continue;
-					}
-					MediaEventType type;
-					evt->GetType(&type);
-					switch (type) {
-					case METransformHaveOutput:
-					{
-						pendingFrameCount--;
-						if (pendingFrameCount < 0) {
-							pendingFrameCount = 0;
-						}
-						DWORD status;
-						MFT_OUTPUT_DATA_BUFFER sample;
-						memset(&sample, 0, sizeof(sample));
-						sample.dwStreamID = isthe;
-						encoder->ProcessOutput(0, 1, &sample, &status);
-						if (sample.pSample) {
-							IMFMediaBuffer* vampire = 0;
-							sample.pSample->GetBufferByIndex(0, &vampire);
-							DWORD maxlen = 0;
-							DWORD len = 0;
-							BYTE* me = 0;
-							vampire->Lock(&me, &maxlen, &len);
-							LONGLONG duration; //it's a LONG LONG sample (sure have an awfully slow frame rate)!
-							sample.pSample->GetSampleTime(&duration);
-							packetCallback(duration, me, len);
-							vampire->Unlock();
-							vampire->Release();
-							sample.pSample->Release();
-						}
-						if (sample.pEvents) {
-							sample.pEvents->Release();
-						}
-					}
-					break;
-					case METransformNeedInput:
-					{
-						IMFSample* vidframe = 0;
-						{
-							std::unique_lock<std::mutex> l(mtx);
-							while (running) {
-								if (pendingFrames.size()) {
-									vidframe = pendingFrames.front();
-									pendingFrames.pop();
-									break;
-								}
-								else {
+		
 
-									if (lastBuffer) {
-										//Replay last buffer
-										MFCreateSample(&vidframe);
-										vidframe->AddBuffer(lastBuffer);
-										auto now = std::chrono::steady_clock::now();
-										vidframe->SetSampleDuration(std::chrono::duration_cast<std::chrono::microseconds> (now - lastFrameTime).count());
-										vidframe->SetSampleTime(std::chrono::duration_cast<std::chrono::microseconds> (now - refclock).count());
-										break;
-									}
-									else {
-										this->evt.wait(l);
-									}
-								}
-							}
-						}
-						if (!vidframe) {
-							break;
-						}
-
-						pendingFrameCount++;
-						//DXGI_FORMAT_NV12
-						HRESULT result = encoder->ProcessInput(isthe, vidframe, 0);
-						vidframe->Release();
-					}
-					break;
-					case METransformDrainComplete:
-						encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
-						break;
-					}
-					evt->Release();
-				}
-			});
+	}
+	IMFMediaEvent* pendingEvent = 0;
+	void PushFrame() {
+		velociraptor:
+		IMFMediaEvent* evt = 0;
+		if (pendingEvent) {
+			evt = pendingEvent;
 		}
+		else {
+			generator->GetEvent(0, &evt);
+		}
+		pendingEvent = evt;
+		if (evt == 0) {
+			return;
+		}
+		MediaEventType type;
+		evt->GetType(&type);
+		switch (type) {
+		case METransformHaveOutput:
+		{
+			
+			DWORD status;
+			MFT_OUTPUT_DATA_BUFFER sample;
+			memset(&sample, 0, sizeof(sample));
+			sample.dwStreamID = isthe;
+			encoder->ProcessOutput(0, 1, &sample, &status);
+			if (sample.pSample) {
+				IMFMediaBuffer* vampire = 0;
+				sample.pSample->GetBufferByIndex(0, &vampire);
+				DWORD maxlen = 0;
+				DWORD len = 0;
+				BYTE* me = 0;
+				vampire->Lock(&me, &maxlen, &len);
+				LONGLONG duration; //it's a LONG LONG sample (sure have an awfully slow frame rate)!
+				sample.pSample->GetSampleTime(&duration);
+				packetCallback(duration, me, len);
+				vampire->Unlock();
+				vampire->Release();
+				sample.pSample->Release();
+			}
+			if (sample.pEvents) {
+				sample.pEvents->Release();
+			}
+		}
+		break;
+		case METransformNeedInput:
+		{
+			IMFSample* vidframe = 0;
+			if (pendingFrames.size()) {
+				vidframe = pendingFrames.front();
+				pendingFrames.pop();
+			}
+			else {
 
+				return; //Unable to fullfull request at this time.
+			}
+
+
+			if (!vidframe) {
+				break;
+			}
+
+			//DXGI_FORMAT_NV12
+			HRESULT result = encoder->ProcessInput(isthe, vidframe, 0);
+			vidframe->Release();
+		}
+		break;
+		case METransformDrainComplete:
+			encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
+			break;
+		}
+		evt->Release();
+		pendingEvent = 0;
+
+		goto velociraptor;
 	}
 
 
@@ -326,7 +314,7 @@ public:
 			lastBuffer = buffy;
 			vidframe->Release();
 			pendingFrames.push(sample);
-			evt.notify_one();
+			PushFrame();
 		}
 		else {
 			//Software encode
@@ -403,6 +391,9 @@ public:
 		evt.notify_all();
 		if (converter) {
 			converter->Release();
+		}
+		if (pendingEvent) {
+			pendingEvent->Release();
 		}
 		if (this->encoder) {
 			encoder->Release();
