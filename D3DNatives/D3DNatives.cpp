@@ -39,7 +39,7 @@ public:
 	ID3D11VideoProcessorEnumerator* enumerator = 0;
 	D3D11_VIDEO_PROCESSOR_STREAM streaminfo;
 	void(*packetCallback)(int64_t,unsigned char*, int);
-	VideoEncoder(ID3D11Device* dev, ID3D11DeviceContext* ctx, void(*packetCallback)(int64_t,unsigned char*, int)) :dev(dev), ctx(ctx), packetCallback(packetCallback) {
+	VideoEncoder(ID3D11Device* dev, ID3D11DeviceContext* ctx, void(*packetCallback)(int64_t,unsigned char*, int), int width, int height) :dev(dev), ctx(ctx), packetCallback(packetCallback) {
 		MFStartup(MF_VERSION);
 		memset(&streaminfo, 0, sizeof(streaminfo));
 
@@ -49,12 +49,12 @@ public:
 			procdesc.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
 			procdesc.InputFrameRate.Numerator = 0;
 			procdesc.InputFrameRate.Denominator = 0;
-			procdesc.InputWidth = 1920;
-			procdesc.InputHeight = 1080;
+			procdesc.InputWidth = width;
+			procdesc.InputHeight = height;
 			procdesc.OutputFrameRate.Numerator = 0;
 			procdesc.OutputFrameRate.Denominator = 0;
-			procdesc.OutputWidth = 1920;
-			procdesc.OutputHeight = 1080;
+			procdesc.OutputWidth = width;
+			procdesc.OutputHeight = height;
 			procdesc.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
 			viddev->CreateVideoProcessorEnumerator(&procdesc, &enumerator);
 			UINT supportflags;
@@ -92,14 +92,14 @@ public:
 			MFCreateMediaType(&o);
 			o->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
 			o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_ARGB32);
-			MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Get from texture info
+			MFSetAttributeSize(o, MF_MT_FRAME_SIZE, width, height); //TODO: Get from texture info
 			HRESULT e = converter->SetInputType(0, o, 0);
 			o->Release();
 			o = 0;
 			MFCreateMediaType(&o);
 			o->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
 			o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
-			MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Get from texture info
+			MFSetAttributeSize(o, MF_MT_FRAME_SIZE, width, height); //TODO: Get from texture info
 			e = converter->SetOutputType(0, o, 0);
 			
 			e = converter->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
@@ -119,6 +119,7 @@ public:
 				break;
 			}
 			encoder->Release();
+
 		}
 		for (size_t i = 0; i < codelen; i++) {
 			codes[i]->Release();
@@ -126,6 +127,13 @@ public:
 		CoTaskMemFree(codes);
 		if (viddev) {
 			encoder->QueryInterface(&generator);
+			ICodecAPI* api = 0;
+			encoder->QueryInterface(&api);
+			VARIANT variable = {};
+			HRESULT res = api->GetValue(&CODECAPI_AVEncCommonRateControlMode, &variable);
+			variable.uintVal = eAVEncCommonRateControlMode_UnconstrainedVBR;
+			res = api->SetValue(&CODECAPI_AVEncCommonRateControlMode, &variable);
+			api->Release();
 		}
 
 		
@@ -139,7 +147,7 @@ public:
 		o->SetUINT32(MF_MT_AVG_BITRATE, 10000000/2); //TODO: Set this to available bandwidth on network link. Currently optimized for local transfers.
 		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 60, 1);
 		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Get from texture info
-		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_MixedInterlaceOrProgressive);
 		o->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Main);
 		
 		
@@ -153,7 +161,7 @@ public:
 		MFCreateMediaType(&o);
 		o->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
 		o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
-		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_MixedInterlaceOrProgressive);
 		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Load from texture
 		MFSetAttributeRatio(o, MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
 		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 60, 1);
@@ -741,7 +749,7 @@ public:
 		dxgi->Release();
 		DrawBackbuffer();
 		//TODO: Memory leak caused in constructor of VideoEncoder (even with no frames being encoded)
-		encoder = new VideoEncoder(dev11,ctx11,packetCallback);
+		encoder = new VideoEncoder(dev11,ctx11,packetCallback,mode.Width,mode.Height);
 
 
 		ID3D11Resource* videoframe = 0;
