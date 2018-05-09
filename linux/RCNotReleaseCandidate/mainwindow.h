@@ -5,6 +5,7 @@
 #include <qtmpeg.h>
 #include <condition_variable>
 #include <mutex>
+#include <cppext/cppext.h>
 
 namespace Ui {
 class MainWindow;
@@ -19,6 +20,8 @@ public:
     ~MainWindow();
     void paintEvent(QPaintEvent *event);
 private:
+    bool clientConnected;
+    System::PushStream* pushstr;
     std::condition_variable evt;
     std::mutex mtx;
     AbstractMediaPlayer* player;
@@ -26,7 +29,7 @@ private:
     Ui::MainWindow *ui;
 private slots:
     void doRefresh();
-
+    void onPacket(AVPacket* packet);
 signals:
     void refresh();
 };

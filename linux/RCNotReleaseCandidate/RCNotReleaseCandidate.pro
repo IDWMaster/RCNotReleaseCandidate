@@ -24,13 +24,14 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 
 SOURCES += main.cpp\
-        mainwindow.cpp
+        mainwindow.cpp \
+        cppext/cppext.cpp
 
-HEADERS  += mainwindow.h
+HEADERS  += mainwindow.h cppext/cppext.h
 
 FORMS    += mainwindow.ui
 
-unix:!macx: LIBS += -L$$OUT_PWD/../QTMPEG/ -lQTMPEG
+unix:!macx: LIBS += -L$$OUT_PWD/../QTMPEG/ -lQTMPEG -lrt -lavcodec
 
 INCLUDEPATH += $$PWD/../QTMPEG
 DEPENDPATH += $$PWD/../QTMPEG

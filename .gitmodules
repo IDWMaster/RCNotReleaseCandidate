@@ -4,3 +4,6 @@
 [submodule "linux/QTMPEG"]
 	path = linux/QTMPEG
 	url = https://github.com/IDWMaster/QTMPEG
+[submodule "linux/RCNotReleaseCandidate/cppext"]
+	path = linux/RCNotReleaseCandidate/cppext
+	url = https://github.com/IDWMaster/cppext
