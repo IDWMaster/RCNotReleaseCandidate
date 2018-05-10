@@ -198,6 +198,7 @@ namespace RCNotReleaseCandidate
                     
                 }
             });
+            updateThread.Name = "EncodeThread";
             updateThread.Start();
         }
 

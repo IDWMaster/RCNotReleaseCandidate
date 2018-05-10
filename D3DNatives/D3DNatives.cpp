@@ -146,8 +146,8 @@ public:
 		o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
 		o->SetUINT32(MF_MT_AVG_BITRATE, 10000000/2); //TODO: Set this to available bandwidth on network link. Currently optimized for local transfers.
 		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 60, 1);
-		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Get from texture info
-		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_MixedInterlaceOrProgressive);
+		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, width, height); //TODO: Get from texture info
+		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
 		o->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Main);
 		
 		
@@ -161,8 +161,8 @@ public:
 		MFCreateMediaType(&o);
 		o->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
 		o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
-		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_MixedInterlaceOrProgressive);
-		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, 1920, 1080); //TODO: Load from texture
+		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, width, height); //TODO: Load from texture
 		MFSetAttributeRatio(o, MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
 		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 60, 1);
 		e = encoder->SetInputType(thebird, o, 0);
