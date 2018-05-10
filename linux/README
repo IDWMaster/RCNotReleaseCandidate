@@ -1,0 +1,3 @@
+* Compile and install ffmpeg
+* Compile in QT creator
+* To run, set LD_LIBRARY_PATH appropriately
