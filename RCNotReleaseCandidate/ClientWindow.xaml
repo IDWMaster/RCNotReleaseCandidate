@@ -19,6 +19,9 @@
         <TextBlock Text="Host"></TextBlock>
         <TextBox x:Name="hostname" Grid.Column="1" KeyDown="hostname_KeyDown" Text="git.worplex.com"></TextBox>
         <Button Grid.Row="1" Grid.ColumnSpan="2" Click="Button_Click">Connect</Button>
-        <Image Grid.Row="2" Grid.ColumnSpan="3" x:Name="cimg"></Image>
+        <Grid Grid.Row="2" Grid.ColumnSpan="3" x:Name="overlayGrid">
+            <Image x:Name="cimg" MouseMove="cimg_MouseMove" MouseDown="cimg_MouseDown" MouseWheel="cimg_MouseWheel" MouseUp="cimg_MouseUp"></Image>
+        </Grid>
+        
     </Grid>
 </Window>

@@ -256,6 +256,33 @@ namespace RCNotReleaseCandidate
                                     DispatchInput(2, mreader.ReadInt32(), mreader.ReadInt32(), mreader.ReadInt32());
                                 }
                                 break;
+                            case 4:
+                                {
+                                    DispatchInput(3, mreader.ReadInt32(), mreader.ReadInt32(), 0);
+                                }
+                                break;
+                            case 5:
+                                DispatchInput(4, mreader.ReadInt32(), mreader.ReadInt32(), 0);
+                                break;
+
+                            case 6:
+                                DispatchInput(5, mreader.ReadInt32(), mreader.ReadInt32(), 0);
+                                break;
+                            case 7:
+                                DispatchInput(6, mreader.ReadInt32(), mreader.ReadInt32(), 0);
+                                break;
+                            case 8:
+                                DispatchInput(7, mreader.ReadInt32(), mreader.ReadInt32(), 0);
+                                break;
+                            case 9:
+                                DispatchInput(8, mreader.ReadInt32(), mreader.ReadInt32(), mreader.ReadInt32());
+                                break;
+                            case 10:
+                                DispatchInput(9, mreader.ReadInt32(), 0,0);
+                                break;
+                            case 11:
+                                DispatchInput(10, mreader.ReadInt32(),0,0);
+                                break;
                         }
                     }
                     catch (Exception er)

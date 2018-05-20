@@ -927,7 +927,69 @@ extern "C" {
 
 	__declspec(dllexport) void DispatchInput(int type, int x, int y, int id) {
 		if (type > 2) {
-			SendMessageW(0, WM_LBUTTONDOWN, 0, 0);
+			LPARAM eter;
+			int size = sizeof(eter);
+			if (type == 3) {
+				SetCursorPos(x, y);
+			}
+			else {
+				//SendMessageW(HWND_BROADCAST, WM_MOUSEMOVE + (type - 3), 0, x | y << 4);
+				INPUT input = {};
+				input.mi.dx = x;
+				input.mi.dy = y;
+				switch (type) {
+				case 4:
+				{
+					input.type = INPUT_MOUSE;
+					input.mi.mouseData = 0;
+					input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTDOWN;
+					SendInput(1, &input, sizeof(input));
+				}
+					break;
+				case 5:{
+					input.type = INPUT_MOUSE;
+					input.mi.mouseData = 0;
+					input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTUP;
+					SendInput(1, &input, sizeof(input));
+				}
+					   break;
+				case 6:
+				{
+					input.type = INPUT_MOUSE;
+					input.mi.mouseData = 0;
+					input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_RIGHTDOWN;
+					SendInput(1, &input, sizeof(input));
+				}
+				break;
+				case 7: {
+					input.type = INPUT_MOUSE;
+					input.mi.mouseData = 0;
+					input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_RIGHTUP;
+					SendInput(1, &input, sizeof(input));
+				}
+						break;
+				case 8: {
+					input.type = INPUT_MOUSE;
+					input.mi.mouseData = id;
+					input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_WHEEL;
+					SendInput(1, &input, sizeof(input));
+				}
+						break;
+				case 9: {
+					input.type = INPUT_KEYBOARD;
+					input.ki.wVk = x;
+					SendInput(1, &input, sizeof(input));
+				}
+						break;
+				case 10: {
+					input.type = INPUT_KEYBOARD;
+					input.ki.wVk = x;
+					input.ki.dwFlags = KEYEVENTF_KEYUP;
+					SendInput(1, &input, sizeof(input));
+				}
+						break;
+				}
+			}
 		}
 		else {
 			touchInjector.Touch(type, x, y, id);

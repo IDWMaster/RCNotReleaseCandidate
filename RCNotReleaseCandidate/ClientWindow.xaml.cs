@@ -24,6 +24,22 @@ using System.Net;
 using System.Net.Sockets;
 namespace RCNotReleaseCandidate
 {
+    class Overlay:UIElement
+    {
+        protected override bool IsEnabledCore
+        {
+            get
+            {
+                return true;
+            }
+        }
+        public Overlay()
+        {
+            Focusable = true;
+        }
+
+
+    }
     /// <summary>
     /// Interaction logic for ClientWindow.xaml
     /// </summary>
@@ -32,6 +48,8 @@ namespace RCNotReleaseCandidate
         ENGINE_CONTEXT context;
         MainWindow.CB cb;
         D3DImage img = new D3DImage();
+        int width = 1920;
+        int height = 1080;
         void onPacket(long timestamp, IntPtr data, int len)
         {
             Dispatcher.Invoke(delegate () {
@@ -40,11 +58,14 @@ namespace RCNotReleaseCandidate
                 img.Unlock();
             });
         }
+        UIElement overlaycontrol;
         public ClientWindow()
         {
             InitializeComponent();
             cb = onPacket;
             hostname.Focus();
+            overlaycontrol = new Overlay();
+            overlayGrid.Children.Add(overlaycontrol);
         }
 
         Stream str;
@@ -104,6 +125,8 @@ namespace RCNotReleaseCandidate
                 MessageBox.Show(er.Message);
                 mclient.Close();
             }
+            overlaycontrol.KeyDown += cimg_KeyDown;
+            overlaycontrol.KeyUp += cimg_KeyUp;
         }
         private void Button_Click(object sender, RoutedEventArgs e)
         {
@@ -116,6 +139,111 @@ namespace RCNotReleaseCandidate
             {
                 Connect();
             }
+        }
+
+        private void cimg_MouseMove(object sender, MouseEventArgs e)
+        {
+            BinaryWriter mwriter = new BinaryWriter(str);
+            mwriter.Write((byte)4);
+            Point er = e.GetPosition(cimg);
+            er.X /= cimg.ActualWidth;
+            er.Y /= cimg.ActualHeight;
+            er.X *= width;
+            er.Y *= height;
+            mwriter.Write((int)er.X);
+            mwriter.Write((int)er.Y);
+            mwriter.Flush();
+        }
+
+        private void cimg_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            overlaycontrol.Focus();
+            BinaryWriter mwriter = new BinaryWriter(str);
+            byte op = 5;
+            switch (e.ChangedButton)
+            {
+                case MouseButton.Right:
+                    {
+                        op = 7;
+                    }
+                    break;
+            }
+            mwriter.Write(op);
+            Point er = e.GetPosition(cimg);
+            er.X /= cimg.ActualWidth;
+            er.Y /= cimg.ActualHeight;
+            er.X *= width;
+            er.Y *= height;
+            mwriter.Write((int)er.X);
+            mwriter.Write((int)er.Y);
+            mwriter.Flush();
+        }
+
+        private void cimg_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            
+            BinaryWriter mwriter = new BinaryWriter(str);
+            byte op = 6;
+            switch (e.ChangedButton)
+            {
+                case MouseButton.Right:
+                    {
+                        op = 8;
+                    }
+                    break;
+            }
+            mwriter.Write(op);
+            Point er = e.GetPosition(cimg);
+            er.X /= cimg.ActualWidth;
+            er.Y /= cimg.ActualHeight;
+            er.X *= width;
+            er.Y *= height;
+            mwriter.Write((int)er.X);
+            mwriter.Write((int)er.Y);
+            mwriter.Flush();
+        }
+
+        private void cimg_MouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            BinaryWriter mwriter = new BinaryWriter(str);
+            byte op = 9;
+            
+            mwriter.Write(op);
+            Point er = e.GetPosition(cimg);
+            er.X /= cimg.ActualWidth;
+            er.Y /= cimg.ActualHeight;
+            er.X *= width;
+            er.Y *= height;
+            mwriter.Write((int)er.X);
+            mwriter.Write((int)er.Y);
+            mwriter.Write(e.Delta); //Are they a good airline? Is there such a thing as a good airline?
+            mwriter.Flush();
+        }
+
+        private void cimg_KeyDown(object sender, KeyEventArgs e)
+        {
+            if(str == null)
+            {
+                return;
+            }
+            e.Handled = true;
+            int keycode = KeyInterop.VirtualKeyFromKey(e.Key);
+            BinaryWriter mwriter = new BinaryWriter(str);
+            mwriter.Write((byte)10);
+            mwriter.Write(keycode);
+        }
+
+        private void cimg_KeyUp(object sender, KeyEventArgs e)
+        {
+            if(str == null)
+            {
+                return;
+            }
+            e.Handled = true;
+            int keycode = KeyInterop.VirtualKeyFromKey(e.Key);
+            BinaryWriter mwriter = new BinaryWriter(str);
+            mwriter.Write((byte)11);
+            mwriter.Write(keycode);
         }
     }
 }
