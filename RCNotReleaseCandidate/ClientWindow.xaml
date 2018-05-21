@@ -10,6 +10,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"></RowDefinition>
             <RowDefinition Height="Auto"></RowDefinition>
+            <RowDefinition Height="Auto"></RowDefinition>
             <RowDefinition Height="*"></RowDefinition>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
@@ -18,8 +19,10 @@
         </Grid.ColumnDefinitions>
         <TextBlock Text="Host"></TextBlock>
         <TextBox x:Name="hostname" Grid.Column="1" KeyDown="hostname_KeyDown" Text="git.worplex.com"></TextBox>
-        <Button Grid.Row="1" Grid.ColumnSpan="2" Click="Button_Click">Connect</Button>
-        <Grid Grid.Row="2" Grid.ColumnSpan="3" x:Name="overlayGrid">
+        <Button Grid.Row="2" Grid.ColumnSpan="2" Click="Button_Click">Connect</Button>
+        <Label Grid.Row="1" Grid.Column="0">Trust this computer</Label>
+        <CheckBox Grid.Row="1" Grid.Column="1" x:Name="trustedComputer"></CheckBox>
+        <Grid Grid.Row="3" Grid.ColumnSpan="3" x:Name="overlayGrid">
             <Image x:Name="cimg" MouseMove="cimg_MouseMove" MouseDown="cimg_MouseDown" MouseWheel="cimg_MouseWheel" MouseUp="cimg_MouseUp"></Image>
         </Grid>
         

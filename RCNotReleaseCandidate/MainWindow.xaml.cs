@@ -39,12 +39,52 @@ namespace RCNotReleaseCandidate
         //Stream debugStream = File.Create("C:\\cygwin64\\debug");
         TcpListener mlist;
         bool running = true;
-        
         public MainWindow()
         {
             currentCallback = frameHandler;
             InitializeComponent();
-
+            pointercallback = (type) => {
+                
+                if (str != null)
+                {
+                    BinaryWriter mwriter = new BinaryWriter(str);
+                    switch (type)
+                    {
+                        case 0:
+                            {
+                                //Hide mouse cursor
+                                lock (str)
+                                {
+                                    mwriter.Write(12);
+                                }
+                            }
+                            break;
+                        case 1:
+                            {
+                                //Show mouse cursor
+                                lock (str)
+                                {
+                                    mwriter.Write(13);
+                                }
+                            }
+                            break;
+                        case 2:
+                            {
+                                //Change mouse cursor
+                                IntPtr cursor = GetCurrentCursor();
+                                lock (str)
+                                {
+                                    mwriter.Write((byte)14);
+                                    mwriter.Write(cursor.ToInt64());
+                                    
+                                }
+                                
+                            }
+                            break;
+                    }
+                }
+            };
+            InstallHook(pointercallback);
             Loaded += windowLoaded;
             Closed += MainWindow_Closed;
             drawTarget.Source = renderTarget;
@@ -85,7 +125,14 @@ namespace RCNotReleaseCandidate
         }
 
         public delegate void CB(long timestamp,IntPtr data, int len);
+        public delegate void PointerCB(int type);
         ENGINE_CONTEXT ctx;
+        [SuppressUnmanagedCodeSecurity]
+        [DllImport("D3DNatives.dll")]
+        public static extern IntPtr GetCurrentCursor();
+        [SuppressUnmanagedCodeSecurity]
+        [DllImport("D3DNatives.dll")]
+        public static extern void InstallHook(PointerCB beethovensPhoneNumber);
         [SuppressUnmanagedCodeSecurity]
         [DllImport("D3DNatives.dll")]
         public static extern ENGINE_CONTEXT CreateEngine(IntPtr window, CB callback);
@@ -127,6 +174,7 @@ namespace RCNotReleaseCandidate
             }
         }
         CB currentCallback;
+        PointerCB pointercallback;
 
         private void frameHandler(long timestamp, IntPtr data, int len)
         {
@@ -139,13 +187,15 @@ namespace RCNotReleaseCandidate
             try
             {
                 //MemoryStream mstream = new MemoryStream();
-                BinaryWriter mwriter = new BinaryWriter(str);
-                mwriter.Write((byte)0);
-                mwriter.Write(timestamp);
-                mwriter.Write(buffer.Length);
-                mwriter.Write(buffer);
-                str.Flush();
-
+                lock (str)
+                {
+                    BinaryWriter mwriter = new BinaryWriter(str);
+                    mwriter.Write((byte)0);
+                    mwriter.Write(timestamp);
+                    mwriter.Write(buffer.Length);
+                    mwriter.Write(buffer);
+                    str.Flush();
+                }
             }
             catch (Exception er)
             {
@@ -282,6 +332,28 @@ namespace RCNotReleaseCandidate
                                 break;
                             case 11:
                                 DispatchInput(10, mreader.ReadInt32(),0,0);
+                                break;
+                            case 16:
+                                {
+                                    IntPtr cursor = GetCurrentCursor();
+                                    if (mreader.ReadInt64() == cursor.ToInt64())
+                                    {
+                                        using (var ico = System.Drawing.Icon.FromHandle(cursor))
+                                        {
+                                            MemoryStream mstream = new MemoryStream();
+                                            ico.Save(mstream);
+                                            byte[] me = mstream.ToArray();
+                                            lock (str)
+                                            {
+                                                BinaryWriter mwriter = new BinaryWriter(str);
+                                                mwriter.Write((byte)15);
+                                                mwriter.Write(cursor.ToInt64());
+                                                mwriter.Write(me.Length);
+                                                mwriter.Write(me);
+                                            }
+                                        }
+                                    }
+                                }
                                 break;
                         }
                     }

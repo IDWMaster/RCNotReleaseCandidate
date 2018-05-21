@@ -905,9 +905,77 @@ public:
 	}
 };
 
+
+static VOID CALLBACK callbeethoven(
+	HWINEVENTHOOK hWinEventHook,
+	DWORD         evt,
+	HWND          hwnd,
+	LONG          idObject,
+	LONG          idChild,
+	DWORD         idEventThread,
+	DWORD         dwmsEventTime);
+
+class CursorMonitor {
+public:
+	bool running;
+	CursorMonitor() {
+		running = true;
+	}
+	void(*callback)(int type);
+	void initialize(void(*callback)(int type)) {
+		this->callback = callback;
+		CoInitialize(0);
+		WINEVENTPROC ecessor;
+		auto hook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_NAMECHANGE, 0, callbeethoven, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+		MSG msg;
+		while (running && GetMessage(&msg,0,0,0)) {
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+	}
+};
+
 static Injector touchInjector;
+static CursorMonitor curses;
+
+static VOID CALLBACK callbeethoven(
+	HWINEVENTHOOK hWinEventHook,
+	DWORD         evt,
+	HWND          hwnd,
+	LONG          idObject,
+	LONG          idChild,
+	DWORD         idEventThread,
+	DWORD         dwmsEventTime) {
+	if (idObject == OBJID_CURSOR) {
+		switch (evt) {
+		case EVENT_OBJECT_HIDE:
+			curses.callback(0);
+			break;
+		case EVENT_OBJECT_SHOW:
+			curses.callback(1);
+			break;
+		case EVENT_OBJECT_NAMECHANGE:
+			curses.callback(2);
+			break;
+		}
+	}
+}
+
 
 extern "C" {
+	__declspec(dllexport) HCURSOR GetCurrentCursor() {
+		CURSORINFO rmation = {};
+		rmation.cbSize = sizeof(rmation);
+		GetCursorInfo(&rmation);
+		return rmation.hCursor;
+	}
+	__declspec(dllexport) void InstallHook(void(*callback)(int type)) {
+		std::thread m([=]() {
+
+			curses.initialize(callback);
+		});
+		m.detach();
+	}
 	__declspec(dllexport) void SendPacket(WPFEngine* engine, unsigned char* packet, int len) {
 		engine->SendPacket(packet, len);
 	}

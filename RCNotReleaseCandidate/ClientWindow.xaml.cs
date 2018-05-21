@@ -67,8 +67,12 @@ namespace RCNotReleaseCandidate
             overlaycontrol = new Overlay();
             overlayGrid.Children.Add(overlaycontrol);
         }
-
+        Dictionary<ulong, Cursor> ulongforcursors = new Dictionary<ulong, Cursor>();
         Stream str;
+        void LoadCursor(ulong forthisparticularcursor)
+        {
+            cimg.Cursor = ulongforcursors[forthisparticularcursor];
+        }
         void StartVideo()
         {
             
@@ -97,6 +101,52 @@ namespace RCNotReleaseCandidate
                                     }
                                 }
                                 break;
+                            case 12:
+                                Dispatcher.Invoke(() => {
+                                    if(trustedComputer.IsChecked.Value)
+                                    {
+                                        System.Windows.Forms.Cursor.Hide();
+                                    }
+                                });
+                                break;
+                            case 13:
+                                Dispatcher.Invoke(() => {
+                                    if (trustedComputer.IsChecked.Value)
+                                    {
+                                        System.Windows.Forms.Cursor.Show();
+                                    }
+                                });
+                                break;
+                            case 14:
+                                ulong forme = mreader.ReadUInt64();
+                                Dispatcher.Invoke(() => {
+                                    if (trustedComputer.IsChecked.Value)
+                                    {
+                                        if(ulongforcursors.ContainsKey(forme))
+                                        {
+                                            LoadCursor(forme);
+                                        }else
+                                        {
+                                            BinaryWriter mwriter = new BinaryWriter(str);
+                                            mwriter.Write((byte)16);
+                                            mwriter.Write(forme);
+                                        }
+                                    }
+                                });
+                                break;
+                            case 15:
+                                {
+                                    ulong foranothercursor = mreader.ReadUInt64();
+                                    MemoryStream cstr = new MemoryStream(mreader.ReadBytes(mreader.ReadInt32()));
+                                    Dispatcher.Invoke(() => {
+                                        Cursor curses = new Cursor(cstr);
+                                        ulongforcursors[foranothercursor] = curses;
+                                        LoadCursor(foranothercursor);
+                                    });
+                                }
+                                break;
+                            case 16:
+                                break; //RESERVED. DO NOT USE.
                             default:
                                 throw new Exception("Unsupported operation");
                                 break;
