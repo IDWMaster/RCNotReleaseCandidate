@@ -199,6 +199,17 @@ namespace DroidView
 
                                     }
                                     break;
+                                case 14:
+                                    ulong forme = mreader.ReadUInt64();
+                                    
+                                    break;
+                                case 15:
+                                    {
+                                        ulong foranothercursor = mreader.ReadUInt64();
+                                        MemoryStream cstr = new MemoryStream(mreader.ReadBytes(mreader.ReadInt32()));
+                                        //Android doesn't support mouse cursors (at least not to my knowledge)
+                                    }
+                                    break;
                             }
                         }
                         catch (Exception er)
