@@ -1,0 +1,30 @@
+﻿<Window x:Class="RCNotReleaseCandidate.ClientWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:RCNotReleaseCandidate"
+        mc:Ignorable="d"
+        Title="ClientWindow" Height="300" Width="300">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"></RowDefinition>
+            <RowDefinition Height="Auto"></RowDefinition>
+            <RowDefinition Height="Auto"></RowDefinition>
+            <RowDefinition Height="*"></RowDefinition>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"></ColumnDefinition>
+            <ColumnDefinition Width="*"></ColumnDefinition>
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="Host"></TextBlock>
+        <TextBox x:Name="hostname" Grid.Column="1" KeyDown="hostname_KeyDown" Text="git.worplex.com"></TextBox>
+        <Button Grid.Row="2" Grid.ColumnSpan="2" Click="Button_Click">Connect</Button>
+        <Label Grid.Row="1" Grid.Column="0">Trust this computer</Label>
+        <CheckBox Grid.Row="1" Grid.Column="1" x:Name="trustedComputer"></CheckBox>
+        <Grid Grid.Row="3" Grid.ColumnSpan="3" x:Name="overlayGrid">
+            <Image x:Name="cimg" MouseMove="cimg_MouseMove" MouseDown="cimg_MouseDown" MouseWheel="cimg_MouseWheel" MouseUp="cimg_MouseUp"></Image>
+        </Grid>
+        
+    </Grid>
+</Window>
