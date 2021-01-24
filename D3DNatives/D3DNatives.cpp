@@ -84,7 +84,8 @@ public:
 		{
 			//create software encoder
 			MFTEnumEx(MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG_SYNCMFT, 0, &info, &codes, &codelen);
-			viddev = nullptr; //TODO: Fix memory leak
+			viddev->Release();
+			viddev = nullptr;
 		}
 		HRESULT e = S_OK;
 		IMFDXGIDeviceManager* devmgr = 0;
