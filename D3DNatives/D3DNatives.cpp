@@ -80,6 +80,12 @@ public:
 		UINT32 codelen;
 		//MFTEnumEx(MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG_HARDWARE, 0, &info, &codes, &codelen);
 		MFTEnumEx(MFT_CATEGORY_VIDEO_ENCODER, viddev ? MFT_ENUM_FLAG_HARDWARE : MFT_ENUM_FLAG_SYNCMFT, 0, &info, &codes, &codelen);
+		if (!codelen) // No graphics card available
+		{
+			//create software encoder
+			MFTEnumEx(MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG_SYNCMFT, 0, &info, &codes, &codelen);
+			viddev = nullptr; //TODO: Fix memory leak
+		}
 		HRESULT e = S_OK;
 		IMFDXGIDeviceManager* devmgr = 0;
 		UINT togepi = 0;
