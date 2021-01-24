@@ -39,7 +39,7 @@ namespace DroidView
 
             try
             {
-                await mclient.ConnectAsync("192.168.86.58", 3870);
+                await mclient.ConnectAsync(FindViewById<EditText>(Resource.Id.editText1).Text, 3870);
                 RaceCar.connection = mclient.GetStream();
                 StartActivity(typeof(RaceCar)); //start your engines!
             }
