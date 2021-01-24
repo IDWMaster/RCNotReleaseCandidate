@@ -23,259 +23,268 @@ using Android.Graphics;
 
 namespace DroidView
 {
-    class SurfsUp : Java.Lang.Object, ISurfaceHolderCallback
-    {
-        public void SurfaceChanged(ISurfaceHolder holder, [GeneratedEnum] Format format, int width, int height)
-        {
-        }
-        public Action created;
-        public void SurfaceCreated(ISurfaceHolder holder)
-        {
-            created();
-        }
+	class SurfsUp : Java.Lang.Object, ISurfaceHolderCallback
+	{
+		public void SurfaceChanged(ISurfaceHolder holder, [GeneratedEnum] Format format, int width, int height)
+		{
+		}
+		public Action created;
+		public void SurfaceCreated(ISurfaceHolder holder)
+		{
+			created();
+		}
 
-        public void SurfaceDestroyed(ISurfaceHolder holder)
-        {
-        }
-    }
+		public void SurfaceDestroyed(ISurfaceHolder holder)
+		{
+		}
+	}
 
-    class PendingSurface
-    {
-        public long presentationTimestamp;
-        public int ID;
-    }
+	class PendingSurface
+	{
+		public long presentationTimestamp;
+		public int ID;
+	}
 
-    class PendingPacket
-    {
-        public byte[] data;
-        public long timestamp;
-    }
+	class PendingPacket
+	{
+		public byte[] data;
+		public long timestamp;
+	}
 
-    [Activity(Label = "RaceCar",ScreenOrientation = Android.Content.PM.ScreenOrientation.Landscape, Immersive = true)]
-    public class RaceCar : Activity
-    {
-        public static Stream connection;
-        Android.Media.MediaCodec codec;
-        SurfaceView sview;
-        
-        public RaceCar()
-        {
-            
-        }
-        bool running = true;
-        AutoResetEvent evt = new AutoResetEvent(false);
-        protected override void OnDestroy()
-        {
-            running = false;
-            evt.WaitOne();
-            base.OnDestroy();
-            codec.Dispose();
-            sview.Dispose();
-        }
-        protected override void OnCreate(Bundle savedInstanceState)
-        {
-            base.OnCreate(savedInstanceState);
-            codec = Android.Media.MediaCodec.CreateDecoderByType("video/avc");
-            sview = new SurfaceView(this);
-            SetContentView(sview);
-            sview.Touch += Sview_Touch;
-            sview.Holder.AddCallback(new SurfsUp() {  created = ()=> {
-                codec.Configure(Android.Media.MediaFormat.CreateVideoFormat("video/avc", 1920, 1080), sview.Holder.Surface, null, Android.Media.MediaCodecConfigFlags.None);
-                codec.SetOutputSurface(sview.Holder.Surface);
-                codec.Start();
-                Queue<PendingPacket> pendingPackets = new Queue<PendingPacket>();
-                Queue<PendingSurface> pendingFrames = new Queue<PendingSurface>();
-                AutoResetEvent evt = new AutoResetEvent(false);
-                System.Threading.Thread renderThread = new Thread(delegate () {
-                    long currentTimestamp = 0;
-                    //Time since last frame
-                    System.Diagnostics.Stopwatch mwatch = new System.Diagnostics.Stopwatch();
+	[Activity(Label = "RaceCar", ScreenOrientation = Android.Content.PM.ScreenOrientation.Landscape, Immersive = true)]
+	public class RaceCar : Activity
+	{
+		public static Stream connection;
+		Android.Media.MediaCodec codec;
+		SurfaceView sview;
 
-                    while (running) {
-                        PendingSurface surface = null;
-                        lock (pendingFrames)
-                        {
-                            if(pendingFrames.Count>0)
-                            {
-                                surface = pendingFrames.Dequeue();
-                                
-                            }
-                        }
-                        if (surface == null)
-                        {
-                            evt.WaitOne();
-                        } else
-                        {
-                            if (currentTimestamp != 0)
-                            {
-                                /*int sleeptime = (int)(surface.presentationTimestamp-currentTimestamp);
-                                sleeptime -= (int)mwatch.ElapsedMilliseconds;
-                                mwatch.Reset();
-                                mwatch.Start();
-                                if (sleeptime>0)
-                                {
-                                    System.Threading.Thread.Sleep(sleeptime);
-                                }*/
-                            }
-                            currentTimestamp = surface.presentationTimestamp;
-                            codec.ReleaseOutputBuffer(surface.ID, true);
-                        }
+		public RaceCar()
+		{
 
-                    }
-                });
-                renderThread.Start();
+		}
+		bool running = true;
+		AutoResetEvent evt = new AutoResetEvent(false);
+		protected override void OnDestroy()
+		{
+			running = false;
+			evt.WaitOne();
+			base.OnDestroy();
+			codec.Dispose();
+			sview.Dispose();
+		}
+		protected override void OnCreate(Bundle savedInstanceState)
+		{
+			base.OnCreate(savedInstanceState);
+			codec = Android.Media.MediaCodec.CreateDecoderByType("video/avc");
+			sview = new SurfaceView(this);
+			SetContentView(sview);
+			sview.Touch += Sview_Touch;
+			sview.Holder.AddCallback(new SurfsUp()
+			{
+				created = () =>
+				{
+					codec.Configure(Android.Media.MediaFormat.CreateVideoFormat("video/avc", 1920, 1080), sview.Holder.Surface, null, Android.Media.MediaCodecConfigFlags.None);
+					codec.SetOutputSurface(sview.Holder.Surface);
+					codec.Start();
+					Queue<PendingPacket> pendingPackets = new Queue<PendingPacket>();
+					Queue<PendingSurface> pendingFrames = new Queue<PendingSurface>();
+					AutoResetEvent evt = new AutoResetEvent(false);
+					System.Threading.Thread renderThread = new Thread(delegate ()
+					{
+						long currentTimestamp = 0;
+						//Time since last frame
+						System.Diagnostics.Stopwatch mwatch = new System.Diagnostics.Stopwatch();
 
+						while (running)
+						{
+							PendingSurface surface = null;
+							lock (pendingFrames)
+							{
+								if (pendingFrames.Count > 0)
+								{
+									surface = pendingFrames.Dequeue();
 
-                System.Threading.Thread decodeThread = new Thread(delegate () {
-                    while(running)
-                    {
-                        PendingPacket _packet = null;
-                        lock(pendingPackets)
-                        {
-                            if(pendingPackets.Any())
-                            {
-                                _packet = pendingPackets.Dequeue();
-                            }
-                        }
-                        if(_packet == null)
-                        {
-                            evt.WaitOne();
-                            continue;
-                        }
-                        byte[] packet = _packet.data;
-                        long timestamp = _packet.timestamp;
-                        int id = codec.DequeueInputBuffer(-1);
-                        using (var buffy = codec.GetInputBuffer(id))
-                        {
-                            if (buffy.Capacity() >= packet.Length)
-                            {
-                                Marshal.Copy(packet, 0, buffy.GetDirectBufferAddress(), packet.Length);
-                                codec.QueueInputBuffer(id, 0, packet.Length, timestamp, Android.Media.MediaCodecBufferFlags.None);
-                                using (var info = new Android.Media.MediaCodec.BufferInfo())
-                                {
-                                    while (true)
-                                    {
-                                        int idx = codec.DequeueOutputBuffer(info, 0);
-                                        if (idx >= 0)
-                                        {
-                                            var sval = new PendingSurface() { ID = idx, presentationTimestamp = info.PresentationTimeUs / 1000 };
-                                            lock (pendingFrames)
-                                            {
-                                                pendingFrames.Enqueue(sval);
-                                                evt.Set();
-                                            }
-                                        }
-                                        else
-                                        {
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-                decodeThread.Start();
+								}
+							}
+							if (surface == null)
+							{
+								evt.WaitOne();
+							}
+							else
+							{
+								if (currentTimestamp != 0)
+								{
+									/*int sleeptime = (int)(surface.presentationTimestamp-currentTimestamp);
+									sleeptime -= (int)mwatch.ElapsedMilliseconds;
+									mwatch.Reset();
+									mwatch.Start();
+									if (sleeptime>0)
+									{
+										System.Threading.Thread.Sleep(sleeptime);
+									}*/
+								}
+								currentTimestamp = surface.presentationTimestamp;
+								codec.ReleaseOutputBuffer(surface.ID, true);
+							}
+
+						}
+					});
+					renderThread.Start();
 
 
-                BinaryReader mreader = new BinaryReader(connection);
-                System.Threading.Thread netThread = new Thread(delegate () {
-                    while (running)
-                    {
-                        try
-                        {
-                            switch (mreader.ReadByte())
-                            {
-                                case 0:
-                                    {
-                                        long timestamp = mreader.ReadInt64();
-                                        byte[] packet = mreader.ReadBytes(mreader.ReadInt32());
-                                        PendingPacket mpacket = new PendingPacket() { data = packet, timestamp = timestamp };
-                                        lock (pendingPackets)
-                                        {
-                                            pendingPackets.Enqueue(mpacket);
-                                        }
-                                        
+					System.Threading.Thread decodeThread = new Thread(delegate ()
+					{
+						while (running)
+						{
+							PendingPacket _packet = null;
+							lock (pendingPackets)
+							{
+								if (pendingPackets.Any())
+								{
+									_packet = pendingPackets.Dequeue();
+								}
+							}
+							if (_packet == null)
+							{
+								evt.WaitOne();
+								continue;
+							}
+							byte[] packet = _packet.data;
+							long timestamp = _packet.timestamp;
+							int id = codec.DequeueInputBuffer(-1);
+							using (var buffy = codec.GetInputBuffer(id))
+							{
+								if (buffy.Capacity() >= packet.Length)
+								{
+									Marshal.Copy(packet, 0, buffy.GetDirectBufferAddress(), packet.Length);
+									codec.QueueInputBuffer(id, 0, packet.Length, timestamp, Android.Media.MediaCodecBufferFlags.None);
+									using (var info = new Android.Media.MediaCodec.BufferInfo())
+									{
+										while (true)
+										{
+											int idx = codec.DequeueOutputBuffer(info, 0);
+											if (idx >= 0)
+											{
+												var sval = new PendingSurface() { ID = idx, presentationTimestamp = info.PresentationTimeUs / 1000 };
+												lock (pendingFrames)
+												{
+													pendingFrames.Enqueue(sval);
+													evt.Set();
+												}
+											}
+											else
+											{
+												break;
+											}
+										}
+									}
+								}
+							}
+						}
+					});
+					decodeThread.Start();
 
-                                    }
-                                    break;
-                                case 14:
-                                    ulong forme = mreader.ReadUInt64();
-                                    
-                                    break;
-                                case 15:
-                                    {
-                                        ulong foranothercursor = mreader.ReadUInt64();
-                                        MemoryStream cstr = new MemoryStream(mreader.ReadBytes(mreader.ReadInt32()));
-                                        //Android doesn't support mouse cursors (at least not to my knowledge)
-                                    }
-                                    break;
-                            }
-                        }
-                        catch (Exception er)
-                        {
 
-                        }
+					BinaryReader mreader = new BinaryReader(connection);
+					System.Threading.Thread netThread = new Thread(delegate ()
+					{
+						while (running)
+						{
+							try
+							{
+								switch (mreader.ReadByte())
+								{
+									case 0:
+									{
+										long timestamp = mreader.ReadInt64();
+										int length = mreader.ReadInt32();
+										byte[] packet = mreader.ReadBytes(length);
+										PendingPacket mpacket = new PendingPacket() { data = packet, timestamp = timestamp };
+										lock (pendingPackets)
+										{
+											pendingPackets.Enqueue(mpacket);
+										}
 
-                        evt.Set();
-                    }
-                });
-                netThread.Start();
 
-            }
-            });
-            
-        }
+									}
+									break;
+									case 14:
+										ulong forme = mreader.ReadUInt64();
 
-        private void Sview_Touch(object sender, View.TouchEventArgs e)
-        {
-            var view = sender as View;
-            for (int i = 0; i < e.Event.PointerCount; i++)
-            {
-                int id = e.Event.GetPointerId(i);
-                double x = e.Event.GetX();
-                double y = e.Event.GetY();
-                x /= view.Width;
-                y /= view.Height;
+										break;
+									case 15:
+									{
+										ulong foranothercursor = mreader.ReadUInt64();
+										MemoryStream cstr = new MemoryStream(mreader.ReadBytes(mreader.ReadInt32()));
+										//Android doesn't support mouse cursors (at least not to my knowledge)
+									}
+									break;
+								}
+							}
+							catch (Exception er)
+							{
 
-                x *= 1920;
-                y *= 1080;
-                BinaryWriter mwriter = new BinaryWriter(connection);
-                byte opcode = 0;
-                switch (e.Event.Action)
-                {
-                    case MotionEventActions.Down:
-                        opcode = 1;
-                        break;
-                    case MotionEventActions.Up:
-                        opcode = 2;
-                        break;
-                    case MotionEventActions.Move:
-                        opcode = 3;
-                        break;
-                }
-                lock (connection)
-                {
-                    mwriter.Write(opcode);
-                    mwriter.Write((int)x);
-                    mwriter.Write((int)y);
-                    mwriter.Write(id);
-                }
-            }
-            lock(connection)
-            {
-                connection.Flush();
-            }
-        }
+							}
 
-        protected override void Dispose(bool disposing)
-        {
-            if(disposing)
-            {
-                connection.Dispose();
-                evt.Dispose();
-            }
-            base.Dispose(disposing);
-        }
-    }
+							evt.Set();
+						}
+					});
+					netThread.Start();
+
+				}
+			});
+
+		}
+
+		private void Sview_Touch(object sender, View.TouchEventArgs e)
+		{
+			var view = sender as View;
+			for (int i = 0; i < e.Event.PointerCount; i++)
+			{
+				int id = e.Event.GetPointerId(i);
+				double x = e.Event.GetX();
+				double y = e.Event.GetY();
+				x /= view.Width;
+				y /= view.Height;
+
+				x *= 1920;
+				y *= 1080;
+				BinaryWriter mwriter = new BinaryWriter(connection);
+				byte opcode = 0;
+				switch (e.Event.Action)
+				{
+					case MotionEventActions.Down:
+						opcode = 1;
+						break;
+					case MotionEventActions.Up:
+						opcode = 2;
+						break;
+					case MotionEventActions.Move:
+						opcode = 3;
+						break;
+				}
+				lock (connection)
+				{
+					mwriter.Write(opcode);
+					mwriter.Write((int)x);
+					mwriter.Write((int)y);
+					mwriter.Write(id);
+				}
+			}
+			lock (connection)
+			{
+				connection.Flush();
+			}
+		}
+
+		protected override void Dispose(bool disposing)
+		{
+			if (disposing)
+			{
+				connection.Dispose();
+				evt.Dispose();
+			}
+			base.Dispose(disposing);
+		}
+	}
 }

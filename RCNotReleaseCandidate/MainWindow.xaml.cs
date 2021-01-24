@@ -55,7 +55,7 @@ namespace RCNotReleaseCandidate
                                 //Hide mouse cursor
                                 lock (str)
                                 {
-                                    mwriter.Write(12);
+                                    mwriter.Write((byte)12);
                                 }
                             }
                             break;
@@ -64,7 +64,7 @@ namespace RCNotReleaseCandidate
                                 //Show mouse cursor
                                 lock (str)
                                 {
-                                    mwriter.Write(13);
+                                    mwriter.Write((byte)13);
                                 }
                             }
                             break;
