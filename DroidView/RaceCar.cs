@@ -197,7 +197,8 @@ namespace DroidView
 									case 0:
 									{
 										long timestamp = mreader.ReadInt64();
-										byte[] packet = mreader.ReadBytes(mreader.ReadInt32());
+										int length = mreader.ReadInt32();
+										byte[] packet = mreader.ReadBytes(length);
 										PendingPacket mpacket = new PendingPacket() { data = packet, timestamp = timestamp };
 										lock (pendingPackets)
 										{
