@@ -151,7 +151,7 @@ public:
 		MFCreateMediaType(&o);
 		o->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
 		o->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
-		o->SetUINT32(MF_MT_AVG_BITRATE, 10000000/2); //TODO: Set this to available bandwidth on network link. Currently optimized for local transfers.
+		o->SetUINT32(MF_MT_AVG_BITRATE, 10000000*2); //TODO: Set this to available bandwidth on network link. Currently optimized for local transfers.
 		MFSetAttributeRatio(o, MF_MT_FRAME_RATE, 60, 1);
 		MFSetAttributeSize(o, MF_MT_FRAME_SIZE, width, height); //TODO: Get from texture info
 		o->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
@@ -376,12 +376,16 @@ public:
 			MFCreateSample(&sample);
 			buffy = 0;
 			
-			MFCreate2DMediaBuffer(1920, 1080, MFVideoFormat_NV12.Data1, false, &buffy);
+			MFCreate2DMediaBuffer(ription.Width, ription.Height, MFVideoFormat_NV12.Data1, false, &buffy);
 			sample->AddBuffer(buffy);
 			buffy->Release();
 			slayer.pSample = sample;
 			res = converter->ProcessOutput(0, 1, &slayer, &mac);
+			if (res) {
+				abort();
+			}
 			//TODO: Memory leak below!
+			// NOTE: This crashes
 			res = encoder->ProcessInput(0, sample, 0);
 			mac = 0;
 			sample->Release();
